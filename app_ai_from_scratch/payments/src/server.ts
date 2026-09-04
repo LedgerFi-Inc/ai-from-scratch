@@ -2,12 +2,17 @@ import Fastify from 'fastify';
 import { loadConfig } from './config.ts';
 import { Store } from './db.ts';
 import { MercadoPago, MercadoPagoError } from './mercadopago.ts';
+import { MetaConversions, MetaError, purchaseEvent, sanitizeContext } from './meta.ts';
 import { CURRENCY } from './price.ts';
 import { serviceAuthorized, verifyMercadoPagoSignature } from './security.ts';
 
 const config = loadConfig();
 const store = new Store(config.databaseUrl);
 const provider = new MercadoPago(config);
+// null = not configured. Purchases still grant access; they just never reach Meta.
+const meta = config.metaPixelId && config.metaCapiToken
+  ? new MetaConversions(config.metaPixelId, config.metaCapiToken, config.metaTestEventCode)
+  : null;
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
 const authorized = (request: { headers: Record<string, unknown> }): boolean =>
@@ -75,6 +80,10 @@ async function processOne(): Promise<boolean> {
         await store.redeemCouponReservation(redemptionId, event.providerId);
       }
       if (userId) await sendEntitlement(userId, 'mercadopago.payment', event.providerId, event.id);
+      // After the grant, never before: a Meta hiccup must not delay access.
+      if (userId && String(item.status) === 'approved' && Number(item.transaction_amount) > 0) {
+        await queuePurchase(event.providerId, userId, item);
+      }
     }
     await store.finishEvent(event.id);
   } catch (error) {
@@ -84,9 +93,45 @@ async function processOne(): Promise<boolean> {
   return true;
 }
 
-app.get('/health', async () => ({ ok: true, compiler: 'tsgo', service: 'payments' }));
+/**
+ * Queues the Purchase for Meta. Queues, does not send: the payment event has to
+ * finish whether or not Meta answers, and a Meta outage must never re-run the
+ * entitlement path through failEvent. Delivery has its own outbox loop below.
+ * Same event_id as the thank-you page (`mp:<payment id>`), so Meta counts one
+ * sale even when both arrive.
+ */
+async function queuePurchase(providerId: string, userId: number, item: Record<string, unknown>): Promise<void> {
+  if (!meta) return;
+  const saved = await store.checkoutContext(userId);
+  const payer = item.payer as { email?: unknown } | undefined;
+  const email = saved?.email ?? (typeof payer?.email === 'string' ? payer.email : null);
+  const event = purchaseEvent({ providerId, userId, email,
+    eventTime: Date.parse(String(item.date_approved ?? '')) / 1000,
+    amount: Number(item.transaction_amount), currency: String(item.currency_id ?? CURRENCY),
+    context: saved?.context ?? null, fallbackUrl: `${config.publicOrigin}/pago` });
+  const queued = await store.queueMetaEvent({ eventId: event.event_id, eventName: event.event_name, userId, providerId, payload: event });
+  if (queued) app.log.info({ eventId: event.event_id, userId, matched: Boolean(saved) }, 'meta purchase queued');
+}
 
-app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode?: unknown } }>('/v1/checkout', async (request, reply) => {
+async function deliverMetaOne(): Promise<boolean> {
+  if (!meta) return false;
+  const pending = await store.takeMetaEvent();
+  if (!pending) return false;
+  try {
+    const receipt = await meta.send([pending.payload]);
+    await store.metaSent(pending.eventId, receipt.fbtraceId);
+    app.log.info({ eventId: pending.eventId, fbtraceId: receipt.fbtraceId }, 'meta purchase delivered');
+  } catch (error) {
+    const detail = error instanceof MetaError ? { status: error.status, body: error.body } : { error: String(error) };
+    app.log.error({ eventId: pending.eventId, attempts: pending.attempts, ...detail }, 'meta conversions api rejected event');
+    await store.metaFailed(pending.eventId, pending.attempts, error instanceof MetaError ? `${error.status} ${error.body}` : error);
+  }
+  return true;
+}
+
+app.get('/health', async () => ({ ok: true, compiler: 'tsgo', service: 'payments', meta: meta ? 'enabled' : 'disabled' }));
+
+app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode?: unknown; context?: unknown } }>('/v1/checkout', async (request, reply) => {
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
   const userId = Number(request.body?.userId);
   const email = String(request.body?.email ?? '').trim().toLowerCase();
@@ -96,6 +141,10 @@ app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode
     return reply.code(400).send({ error: 'invalid_actor' });
   }
   if (couponCode && mode === 'subscription') return reply.code(400).send({ error: 'coupon_not_applicable' });
+  // Browser facts the api forwarded (cookies, IP, UA, utm). Validated here, kept
+  // for the Purchase event the webhook will send later. Not a reason to refuse
+  // a checkout: an empty context only lowers Meta's match quality.
+  await store.saveCheckoutContext(userId, email, sanitizeContext(request.body?.context));
   const reservation = couponCode ? await store.reserveCoupon(couponCode, userId) : null;
   if (couponCode && !reservation) return reply.code(422).send({ error: 'invalid_coupon' });
   try {
@@ -200,11 +249,12 @@ app.post<{ Params: { userId: string } }>('/v1/subscriptions/:userId/cancel', asy
 
 app.get('/v1/admin/payments', async (request, reply) => {
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
-  return { payments: await store.listPayments() };
+  return { payments: await store.listPayments(), metaEvents: await store.listMetaEvents() };
 });
 
 await store.migrate();
-const timer = setInterval(() => { void processOne(); }, 1_000);
+if (!meta) app.log.warn('meta conversions api disabled: META_PIXEL_ID and META_CAPI_TOKEN unset, purchases will not be reported to Meta');
+const timer = setInterval(() => { void processOne(); void deliverMetaOne(); }, 1_000);
 timer.unref();
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, async () => {
   clearInterval(timer); await app.close(); await store.close(); process.exit(0);

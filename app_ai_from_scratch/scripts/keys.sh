@@ -177,7 +177,11 @@ ENTITLEMENTS_URL=http://localhost:8787/api/internal/entitlements
 # Los emite Mercado Pago; el generador no puede inventarlos.
 MP_ACCESS_TOKEN=
 MP_PUBLIC_KEY=
-MP_WEBHOOK_SECRET="
+MP_WEBHOOK_SECRET=
+# Meta (medicion de anuncios). Los dos o ninguno: con uno solo payments no arranca.
+META_PIXEL_ID=
+META_CAPI_TOKEN=
+META_TEST_EVENT_CODE="
 
 MESSAGES_ENV="# Generado por scripts/keys.sh — servicio messages/.
 NODE_ENV=development
@@ -190,7 +194,9 @@ WEB_ENV="# Generado por scripts/keys.sh
 API_URL=http://localhost:8787
 PUBLIC_SITE=http://localhost:4321
 # La publica de Mercado Pago SI va en el cliente: es publica a proposito.
-MP_PUBLIC_KEY="
+MP_PUBLIC_KEY=
+# Mismo id de conjunto de datos que META_PIXEL_ID en payments/.env.
+PUBLIC_META_PIXEL_ID="
 
 AI_ENV="# Generado por scripts/keys.sh — servicio de IA (Python, v3).
 # El MISMO valor que IA_SECRETO en api/.env: si difieren, la API recibe 401 del
@@ -230,7 +236,9 @@ MESSAGES_DB_PASSWORD=$MSGDBPASS
 PUBLIC_ORIGIN=http://localhost:4321
 MP_ACCESS_TOKEN=
 MP_PUBLIC_KEY=
-MP_WEBHOOK_SECRET="
+MP_WEBHOOK_SECRET=
+META_PIXEL_ID=
+META_CAPI_TOKEN="
 
 if [ "$PRINT" -eq 1 ]; then
   echo "JWT_SECRET=$JWT"

@@ -4,11 +4,13 @@ import Public from '../layouts/Public.astro';
 import { t } from '../lib/i18n';
 import { publicPrefs } from '../lib/prefs';
 import { grafo, org } from '../lib/seo';
+import { pixelConfigured, pixelEnabled } from '../lib/meta';
 
 const { lang } = publicPrefs(Astro.request);
 const L = t(lang);
 const jsonld = grafo(org());
 const P = L.pub.priv;
+const pixelOn = pixelEnabled(Astro.request);
 ---
 <Public title={P.eb} desc={P.intro} jsonld={jsonld} ancho={900}>
   <div style="display:flex;flex-direction:column;gap:14px;padding-bottom:34px">
@@ -28,7 +30,29 @@ const P = L.pub.priv;
     </section>
   ))}
 
-  <div class="card" style="margin-top:34px;border-left:2px solid var(--ac);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
+  <div class="card" id="ads" style="margin-top:34px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
+    <div>
+      <div class="h3">{P.ads.t}</div>
+      <p class="s" style="color:var(--l2);margin-top:4px">{P.ads.b}</p>
+      <p class="s" style="margin-top:6px">{pixelConfigured() ? (pixelOn ? P.ads.stateOn : P.ads.stateOff) : P.ads.none}</p>
+    </div>
+    {pixelConfigured() && <button class="btn ghost" id="ads-toggle" type="button" data-on={pixelOn ? '1' : '0'}>{pixelOn ? P.ads.off : P.ads.on}</button>}
+  </div>
+  <script>
+    // The server decides the real state by reading no_ads; this only writes the
+    // cookie and reloads, so the page re-renders what actually happens.
+    const toggle = document.getElementById('ads-toggle');
+    toggle?.addEventListener('click', () => {
+      const on = toggle.dataset.on === '1';
+      const secure = location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = on
+        ? `no_ads=1; Max-Age=31536000; Path=/; SameSite=Lax${secure}`
+        : `no_ads=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+      location.reload();
+    });
+  </script>
+
+  <div class="card" style="margin-top:20px;border-left:2px solid var(--ac);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
     <div>
       <div class="h3">{P.contacto}</div>
       <p class="s" style="color:var(--l2);margin-top:4px">{P.contactoB}</p>

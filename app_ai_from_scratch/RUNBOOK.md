@@ -79,6 +79,20 @@ Then `pnpm ontology:export && pnpm ontology` and commit all three.
 | "generate the keys" | `pnpm keys` |
 | "is any account using a leaked password?" | `pnpm audit:passwords` |
 
+### Ads measurement (Meta Pixel + Conversions API)
+
+| You say | Do this | What happens |
+|---|---|---|
+| "turn Meta measurement on" | Put the dataset id in `web/.env` as `PUBLIC_META_PIXEL_ID` and in `payments/.env` as `META_PIXEL_ID`, plus the Conversions API token as `META_CAPI_TOKEN`. In production they are the `META_PIXEL_ID` / `META_CAPI_TOKEN` deploy secrets. | Every page loads the pixel (`web/src/components/MetaPixel.astro`) and fires `PageView`; `/pago` fires `ViewContent` and `InitiateCheckout`; `/registro` fires `CompleteRegistration`; `/pago/gracias` fires `Purchase`. The webhook in `payments` queues the same `Purchase` server-side with `event_id = mp:<payment id>`, so Meta counts one sale. |
+| "test it without polluting the data" | Set `META_TEST_EVENT_CODE` (Events Manager → Test events) on payments and restart. | Server events show up under Test events instead of the live column. Unset it before going live. |
+| "did the purchase reach Meta?" | `GET /v1/admin/payments` (service token) → `metaEvents`, or `psql` on the payments database: `select event_id,state,attempts,fbtrace_id,last_error from meta_events;` | `sent` with an `fbtrace_id` is delivered. `pending` retries with backoff (30 s → 1 h); `dead` after 8 tries, with the last Meta error kept. |
+| "is it on?" | `GET /health` on payments | `meta: enabled` or `meta: disabled`. Disabled is also warned once at boot. |
+
+Half a configuration (id without token, or the reverse) makes payments refuse to
+start. The visitor can switch the pixel off on `/privacidad`; that sets a
+first-party `no_ads` cookie the server honours, so nothing from Meta is loaded
+for that browser.
+
 `pnpm audit:passwords` tries every password this repository has ever published
 against every live account, using the same `verifyPassword` the login path uses,
 and exits 1 on a match. **Run it against any database you deploy.** It reports

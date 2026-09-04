@@ -1,4 +1,5 @@
 import pg from 'pg';
+import type { CheckoutContext, MetaEvent } from './meta.ts';
 import { PRICE_MINOR } from './price.ts';
 
 const { Pool } = pg;
@@ -125,7 +126,109 @@ export class Store {
         active BOOLEAN NOT NULL,
         delivered_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
+      -- What the buyer's browser looked like when checkout started. The Mercado
+      -- Pago webhook arrives from Mercado Pago's servers, so this is the only
+      -- place the Meta Purchase event can take fbp/fbc/IP/UA from. One row per
+      -- user, latest checkout wins.
+      CREATE TABLE IF NOT EXISTS checkout_contexts (
+        user_id BIGINT PRIMARY KEY,
+        email TEXT NOT NULL,
+        fbp TEXT,
+        fbc TEXT,
+        client_ip TEXT,
+        user_agent TEXT,
+        source_url TEXT,
+        utm JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      -- Outbox for Meta Conversions API events. event_id is the dedup key on
+      -- both sides: repeated webhook deliveries for one payment insert nothing.
+      CREATE TABLE IF NOT EXISTS meta_events (
+        event_id TEXT PRIMARY KEY,
+        event_name TEXT NOT NULL,
+        user_id BIGINT,
+        provider_id TEXT,
+        state TEXT NOT NULL DEFAULT 'pending',
+        attempts INT NOT NULL DEFAULT 0,
+        next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        payload JSONB NOT NULL,
+        fbtrace_id TEXT,
+        last_error TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        sent_at TIMESTAMPTZ
+      );
     `);
+  }
+
+  async saveCheckoutContext(userId: number, email: string, context: CheckoutContext): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO checkout_contexts (user_id,email,fbp,fbc,client_ip,user_agent,source_url,utm)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (user_id) DO UPDATE SET
+         email=excluded.email,fbp=excluded.fbp,fbc=excluded.fbc,client_ip=excluded.client_ip,
+         user_agent=excluded.user_agent,source_url=excluded.source_url,utm=excluded.utm,updated_at=now()`,
+      [userId, email, context.fbp, context.fbc, context.clientIp, context.userAgent, context.sourceUrl, context.utm]);
+  }
+
+  async checkoutContext(userId: number): Promise<{ email: string; context: CheckoutContext } | null> {
+    const result = await this.pool.query(
+      `SELECT email,fbp,fbc,client_ip,user_agent,source_url,utm FROM checkout_contexts WHERE user_id=$1`, [userId]);
+    const row = result.rows[0];
+    if (!row) return null;
+    return { email: String(row.email), context: {
+      fbp: row.fbp ?? null, fbc: row.fbc ?? null, clientIp: row.client_ip ?? null, userAgent: row.user_agent ?? null,
+      sourceUrl: row.source_url ?? null, utm: (row.utm ?? {}) as Record<string, string> } };
+  }
+
+  async queueMetaEvent(data: { eventId: string; eventName: string; userId: number; providerId: string;
+    payload: MetaEvent }): Promise<boolean> {
+    const result = await this.pool.query(
+      `INSERT INTO meta_events (event_id,event_name,user_id,provider_id,payload)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (event_id) DO NOTHING`,
+      [data.eventId, data.eventName, data.userId, data.providerId, data.payload]);
+    return result.rowCount === 1;
+  }
+
+  async takeMetaEvent(): Promise<{ eventId: string; attempts: number; payload: MetaEvent } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `SELECT event_id, attempts, payload FROM meta_events
+          WHERE state IN ('pending','processing') AND next_attempt_at <= now()
+          ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED`);
+      const row = result.rows[0];
+      if (!row) { await client.query('COMMIT'); return null; }
+      await client.query(
+        `UPDATE meta_events SET state='processing', attempts=attempts+1,
+                next_attempt_at=now() + interval '5 minutes' WHERE event_id=$1`, [row.event_id]);
+      await client.query('COMMIT');
+      return { eventId: String(row.event_id), attempts: Number(row.attempts) + 1, payload: row.payload as MetaEvent };
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  async metaSent(eventId: string, fbtraceId: string | null): Promise<void> {
+    await this.pool.query(
+      `UPDATE meta_events SET state='sent', sent_at=now(), fbtrace_id=$2, last_error=NULL WHERE event_id=$1`,
+      [eventId, fbtraceId]);
+  }
+
+  async metaFailed(eventId: string, attempts: number, error: unknown): Promise<void> {
+    // Meta accepts an event up to 7 days late, so the retry ladder is generous:
+    // 30 s, 1 min, 2 min ... capped at an hour, dead after 8 tries (~2 h).
+    const dead = attempts >= 8;
+    const seconds = Math.min(3600, 30 * 2 ** Math.max(0, attempts - 1));
+    await this.pool.query(
+      `UPDATE meta_events SET state=$2, last_error=$3, next_attempt_at=now() + ($4 * interval '1 second')
+        WHERE event_id=$1`, [eventId, dead ? 'dead' : 'pending', String(error).slice(0, 500), seconds]);
+  }
+
+  async listMetaEvents(): Promise<unknown[]> {
+    const result = await this.pool.query(
+      `SELECT event_id,event_name,user_id,provider_id,state,attempts,fbtrace_id,last_error,created_at,sent_at
+         FROM meta_events ORDER BY created_at DESC LIMIT 200`);
+    return result.rows;
   }
 
   async recordEvent(eventKey: string, providerId: string, resourceType: string): Promise<boolean> {

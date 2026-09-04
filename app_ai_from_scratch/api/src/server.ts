@@ -919,6 +919,29 @@ async function relay(reply: FastifyReply, response: Response): Promise<unknown> 
   return reply.send(text);
 }
 
+/**
+ * What Meta needs to tie a later Purchase to the ad that brought the buyer:
+ * Meta's own cookies (_fbp/_fbc), our first-touch cookie (ia_attr, written by
+ * web/src/components/MetaPixel.astro), the client IP and user agent. Read from
+ * the request, never from the body: a page cannot fake cookies any more than it
+ * already could, and payments validates every field again before storing it.
+ */
+function checkoutContextOf(req: { cookies?: Record<string, string | undefined>; headers: Record<string, unknown>; ip: string }) {
+  let utm: Record<string, string> = {};
+  try {
+    const raw = req.cookies?.ia_attr ? JSON.parse(decodeURIComponent(req.cookies.ia_attr)) as Record<string, unknown> : {};
+    for (const key of ['source', 'medium', 'campaign', 'content', 'term']) {
+      if (typeof raw[key] === 'string') utm[key] = String(raw[key]).slice(0, 200);
+    }
+  } catch { utm = {}; }
+  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+  return {
+    fbp: req.cookies?._fbp ?? null, fbc: req.cookies?._fbc ?? null,
+    clientIp: forwarded || req.ip, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 512) || null,
+    sourceUrl: `${ORIGIN}/pago`, utm,
+  };
+}
+
 app.post<{ Body: { mode?: unknown; couponCode?: unknown } }>('/api/payments/mercadopago/preference', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const mode = req.body?.mode === 'subscription' ? 'subscription' : 'one_time';
@@ -931,7 +954,7 @@ app.post<{ Body: { mode?: unknown; couponCode?: unknown } }>('/api/payments/merc
     });
   }
   const response = await callPayments('/v1/checkout', { method: 'POST', body: JSON.stringify({
-    userId: user.id, email: user.email, mode, ...(couponCode ? { couponCode } : {}),
+    userId: user.id, email: user.email, mode, ...(couponCode ? { couponCode } : {}), context: checkoutContextOf(req),
   }) });
   return relay(reply, response);
 });

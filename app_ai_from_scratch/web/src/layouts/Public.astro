@@ -7,6 +7,7 @@ import { publicPrefs } from '../lib/prefs';
 import { TOKENS, PUBLIC_BASE } from '../lib/theme-css';
 import PrefToggles from '../components/PrefToggles.astro';
 import { SITE, MARCA } from '../lib/site';
+import MetaPixel from '../components/MetaPixel.astro';
 
 interface Props { title: string; noindex?: boolean; desc?: string; ancho?: number; jsonld?: string; }
 const { title, noindex = false, desc, ancho = 900, jsonld } = Astro.props;
@@ -21,6 +22,7 @@ const F = L.pub.footer;
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <MetaPixel />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>{title} · IA desde cero</title>

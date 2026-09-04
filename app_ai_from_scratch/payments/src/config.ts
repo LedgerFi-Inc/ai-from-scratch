@@ -23,6 +23,20 @@ export interface Config {
   publicOrigin: string;
   entitlementsUrl: string;
   webhookWindowSeconds: number;
+  /** Meta Conversions API. Both set or both unset: half a configuration is a misconfiguration. */
+  metaPixelId: string | null;
+  metaCapiToken: string | null;
+  metaTestEventCode: string | null;
+}
+
+function meta(): Pick<Config, 'metaPixelId' | 'metaCapiToken' | 'metaTestEventCode'> {
+  const pixelId = process.env.META_PIXEL_ID || null;
+  const token = process.env.META_CAPI_TOKEN || null;
+  if (!pixelId && !token) return { metaPixelId: null, metaCapiToken: null, metaTestEventCode: null };
+  if (!pixelId || !token) throw new Error('META_PIXEL_ID and META_CAPI_TOKEN must be set together (or both unset)');
+  if (!/^\d{6,20}$/.test(pixelId)) throw new Error('META_PIXEL_ID must be the numeric Meta dataset id');
+  return { metaPixelId: pixelId, metaCapiToken: secret('META_CAPI_TOKEN', token),
+    metaTestEventCode: process.env.META_TEST_EVENT_CODE || null };
 }
 
 export function loadConfig(): Config {
@@ -37,5 +51,6 @@ export function loadConfig(): Config {
     publicOrigin: (process.env.PUBLIC_ORIGIN ?? 'http://localhost:4321').replace(/\/+$/, ''),
     entitlementsUrl: required('ENTITLEMENTS_URL'),
     webhookWindowSeconds: Math.max(30, Number(process.env.WEBHOOK_WINDOW_SECONDS ?? 300)),
+    ...meta(),
   };
 }

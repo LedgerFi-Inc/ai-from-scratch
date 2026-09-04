@@ -1,0 +1,11 @@
+---
+// Goes inside <head> of every layout and of the pages that own their own head
+// (login, registro, pago, recuperar). Renders the attribution cookie writer
+// always, and either Meta's pixel or a no-op `iaTrack`, so pages can fire events
+// without checking anything. Opt-out cookie (no_ads) is honoured here, server-side.
+import { META_PIXEL_ID, attributionSnippet, noopSnippet, pixelEnabled, pixelSnippet } from '../lib/meta';
+const on = pixelEnabled(Astro.request);
+---
+<script is:inline set:html={attributionSnippet()}></script>
+<script is:inline set:html={on ? pixelSnippet(META_PIXEL_ID) : noopSnippet()}></script>
+{on && <noscript><img height="1" width="1" style="display:none" alt="" src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`} /></noscript>}

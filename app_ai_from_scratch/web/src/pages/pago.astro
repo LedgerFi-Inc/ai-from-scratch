@@ -7,11 +7,12 @@ import { grafo, org, curso } from '../lib/seo';
 import { mercadoDe } from '../lib/region';
 import { narrativaDe } from '../lib/narrative';
 import { SITE, MARCA } from '../lib/site';
-import { ANCLA_TEXTO, MONEDA, PRECIO_TEXTO } from '../lib/price';
+import { ANCLA_TEXTO, MONEDA, PRECIO_MENOR, PRECIO_TEXTO } from '../lib/price';
 import { TOKENS, PUBLIC_BASE } from '../lib/theme-css';
 import { icon } from '../lib/icons';
 import PrefToggles from '../components/PrefToggles.astro';
 import { jsonSafe } from '../lib/json-safe';
+import MetaPixel from '../components/MetaPixel.astro';
 
 const user = await getUser(Astro.request);
 
@@ -44,6 +45,7 @@ const hayCobro = cobros.data?.disponible === true;
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <MetaPixel />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>{P.eb} · IA desde cero</title>
@@ -167,13 +169,17 @@ const hayCobro = cobros.data?.disponible === true;
   </div>
   <div id="toasts"></div>
 
-  <script define:vars={{ P, logged: !!user, moneda: MONEDA, loc: lang === 'en' ? 'en-US' : 'es-CO' }}>
+  <script define:vars={{ P, logged: !!user, moneda: MONEDA, precioMenor: PRECIO_MENOR, loc: lang === 'en' ? 'en-US' : 'es-CO' }}>
     const COLOR = { ok: 'var(--ok)', bad: 'var(--rd)', warn: 'var(--or)', info: 'var(--ac)' };
     const box = document.getElementById('toasts');
     const toast = (k, tt, b) => {
       box.innerHTML = `<div class="toast" style="border-color:${COLOR[k]}"><div style="flex:1">
         <div class="h3" style="color:${COLOR[k]}">${tt}</div><p class="s" style="color:var(--l2);margin-top:4px">${b}</p></div></div>`;
     };
+    // Meta: the sales page counts as ViewContent, the pay click as
+    // InitiateCheckout. Purchase is sent by the payments service from the webhook.
+    const PRODUCTO = { content_name: 'IA desde cero', content_type: 'product', content_ids: ['curso-v1'], num_items: 1, value: precioMenor, currency: moneda };
+    if (window.iaTrack) window.iaTrack('ViewContent', PRODUCTO);
     const coupon = document.getElementById('coupon');
     const couponStatus = document.getElementById('coupon-status');
     // Sin cobros el bloque de pago no se renderiza, asi que estos nodos no
@@ -194,6 +200,7 @@ const hayCobro = cobros.data?.disponible === true;
     }));
     document.getElementById('pay').addEventListener('click', async () => {
       if (!logged) { toast('warn', P.sinCuenta, P.sinCuentaB); return; }
+      if (window.iaTrack) window.iaTrack('InitiateCheckout', PRODUCTO);
       const res = await fetch('/api/payments/mercadopago/preference', { method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ couponCode: couponCode() }) });

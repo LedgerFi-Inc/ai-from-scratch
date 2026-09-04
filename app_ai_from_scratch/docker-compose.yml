@@ -91,6 +91,11 @@ services:
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:?configure Mercado Pago first}
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:?configure Mercado Pago first}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      # Meta Conversions API. Empty = purchases are not reported to Meta (warned
+      # once at boot). Setting only one of the two makes payments refuse to start.
+      META_PIXEL_ID: ${META_PIXEL_ID:-}
+      META_CAPI_TOKEN: ${META_CAPI_TOKEN:-}
+      META_TEST_EVENT_CODE: ${META_TEST_EVENT_CODE:-}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:4321}
       ENTITLEMENTS_URL: http://api:8787/api/internal/entitlements
     depends_on:
@@ -454,6 +459,9 @@ services:
       HOST: 0.0.0.0
       PORT: "4321"
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      # Same dataset id as payments' META_PIXEL_ID: browser and server events must
+      # land in one dataset or Meta cannot deduplicate them.
+      PUBLIC_META_PIXEL_ID: ${META_PIXEL_ID:-}
       PUBLIC_SITE: ${PUBLIC_SITE:-${PUBLIC_ORIGIN:-http://localhost:4321}}
     depends_on:
       # Was a bare `- api`, i.e. service_started: web accepted traffic while the

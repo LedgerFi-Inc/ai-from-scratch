@@ -5,6 +5,7 @@ import { t } from '../../lib/i18n';
 import { publicPrefs } from '../../lib/prefs';
 import { getUser } from '../../lib/session';
 import { icon } from '../../lib/icons';
+import { MONEDA, PRECIO_MENOR } from '../../lib/price';
 
 const { lang } = publicPrefs(Astro.request);
 const L = t(lang);
@@ -56,7 +57,16 @@ const inicial = pagado ? 'ok' : pendiente ? 'pend' : 'verif';
     </div>
   </div>
 
-  <script define:vars={{ P, inicial }}>
+  <script define:vars={{ P, inicial, ref, moneda: MONEDA, precioMenor: PRECIO_MENOR }}>
+    // Purchase with the SAME event_id the payments service sends from the
+    // webhook (mp:<payment id>): Meta deduplicates and counts one sale, not two.
+    // Only once access is confirmed, never on what the query string claims.
+    const compra = () => {
+      if (!window.iaTrack || !/^\d+$/.test(String(ref))) return;
+      window.iaTrack('Purchase', { value: precioMenor, currency: moneda, content_name: 'IA desde cero',
+        content_type: 'product', content_ids: ['curso-v1'], num_items: 1 }, 'mp:' + ref);
+    };
+    if (inicial === 'ok') compra();
     // El webhook puede llegar después que el pagador. Se sondea /api/me un rato
     // corto y, si no confirma, se dice la verdad en vez de fingir acceso.
     if (inicial === 'verif') {
@@ -72,6 +82,7 @@ const inicial = pagado ? 'ok' : pendiente ? 'pend' : 'verif';
             caja.style.borderLeftColor = 'var(--ok)';
             ico.querySelector('svg')?.setAttribute('stroke', 'var(--ok)');
             window.toast('ok', P.tOk, P.tOkB);
+            compra();
             return;
           }
         } catch {}
