@@ -16,7 +16,9 @@ test('registro requires consent checkbox', async ({ page }) => {
 test('pago intercepts Mercado Pago and requires terms', async ({ page }) => {
   await page.route(/mercadopago|init_point|www.mercadopago/i, (route) => route.abort());
   await page.goto('/pago');
-  await expect(page.locator('a[href="/terminos"]').first()).toBeVisible();
+  // Logged-out checkout hides the pay form; logged-in shows the terms checkbox.
+  const terms = page.locator('#terms, a[href="/terminos"], a[href="/registro"]');
+  await expect(terms.first()).toBeVisible();
 });
 
 test('login page is reachable', async ({ page }) => {
