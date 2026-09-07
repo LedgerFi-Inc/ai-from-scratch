@@ -328,7 +328,7 @@ services:
       messages:
         condition: service_healthy
     ports:
-      - "${API_HOST_BIND:-0.0.0.0}:${API_HOST_PORT:-8787}:8787"
+      - "${API_HOST_BIND:-127.0.0.1}:${API_HOST_PORT:-8787}:8787"
     # /api/health touches the labs table, so a green answer means: seed finished,
     # migrations applied, the pool works and the port is bound. That is exactly
     # the gate web needs — without it web served pages mid-seed.
@@ -472,7 +472,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${WEB_HOST_BIND:-0.0.0.0}:${WEB_HOST_PORT:-4321}:4321"
+      - "${WEB_HOST_BIND:-127.0.0.1}:${WEB_HOST_PORT:-4321}:4321"
     # /robots.txt is server-rendered but talks to nothing: it proves the Astro
     # node server is answering without making web's health depend on the api a
     # second time (depends_on already does that).

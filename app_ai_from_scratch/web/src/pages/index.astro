@@ -35,7 +35,7 @@ const precioTxt = PRECIO_TEXTO[lang] ?? PRECIO_TEXTO.es;
 // Precio, renovación y 30 días dicen lo mismo que el FAQ visible (data/landing.ts).
 const PREGUNTAS = lang === 'en' ? [
   { q: 'Do I need to know how to code to take the course?', a: 'No. Not one line of code, and no maths. The 36 labs are solved by choosing, ordering and assembling inside the lesson.' },
-  { q: 'What does it cost and what is included?', a: `${precioTxt} COP for 30 days, and you choose at checkout whether it renews automatically. It includes the 12 lessons, the 36 labs, the PDF in Spanish and English and the Claude Code harness, plus the tutorials, labs, updates and new courses published while your access is active.` },
+  { q: 'What does it cost and what is included?', a: `${precioTxt} COP for 30 days, and you choose at checkout whether it renews automatically. It includes the 12 lessons, the 36 labs, the PDF in Spanish (English coming later) and the Claude Code harness, plus the tutorials, labs, updates and new courses published while your access is active.` },
   { q: 'What about auto-renewal?', a: `It is off by default: after 30 days access pauses and nothing else is charged. If you turn it on, Mercado Pago charges ${precioTxt} COP every month until you cancel from your profile in one click, and you keep access until the end of the paid month.` },
   { q: 'Is there a refund if it is not for me?', a: 'Yes: 14 days from purchase, no explanation needed, back through the same payment method in under 10 business days.' },
   { q: 'Is it available in English?', a: 'Yes. The platform, this page and the lesson content are in Spanish and English, and you switch language from the top bar.' },
@@ -44,7 +44,7 @@ const PREGUNTAS = lang === 'en' ? [
   { q: 'Does AI learn from what I write to it?', a: 'It is not retrained by each conversation. Training and inference are separate moments: when you talk to it, its parameters do not change. If it seems to remember you, the application may have stored your text and included it in the request again.' },
 ] : [
   { q: '¿Necesito saber programar para tomar el curso?', a: 'No. No se escribe una línea de código y no hay matemáticas. Los 36 labs se resuelven eligiendo, ordenando y armando dentro de la lección.' },
-  { q: '¿Cuánto cuesta y qué incluye?', a: `${precioTxt} COP por 30 días, y en el checkout eliges si se renueva solo. Incluye las 12 lecciones, los 36 labs, el PDF en español e inglés y el harness de Claude Code, más los tutoriales, labs, actualizaciones y cursos nuevos que se publiquen mientras tu acceso esté activo.` },
+  { q: '¿Cuánto cuesta y qué incluye?', a: `${precioTxt} COP por 30 días, y en el checkout eliges si se renueva solo. Incluye las 12 lecciones, los 36 labs, el PDF en español (inglés próximamente) y el harness de Claude Code, más los tutoriales, labs, actualizaciones y cursos nuevos que se publiquen mientras tu acceso esté activo.` },
   { q: '¿Qué pasa con la renovación automática?', a: `Viene apagada: a los 30 días el acceso se pausa y no se cobra nada más. Si la activas, Mercado Pago cobra ${precioTxt} COP cada mes hasta que la canceles desde tu perfil en un clic, y sigues entrando hasta el final del mes pagado.` },
   { q: '¿Hay devolución si no me sirve?', a: 'Sí: 14 días desde la compra, sin explicar por qué, por el mismo medio de pago y en menos de 10 días hábiles.' },
   { q: '¿Está disponible en inglés?', a: 'Sí. La plataforma, esta página y el contenido de las lecciones están en español e inglés, y se cambia de idioma desde la barra superior.' },
@@ -595,7 +595,7 @@ section[id]{scroll-margin-top:72px}
       <div>{P.pieMeta1}</div>
       <div>{P.pieMeta2}</div>
     </div>
-    <div style="font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3);border-top:1px solid var(--hair2);padding-top:18px">{P.pieLegal}</div>
+    <div style="font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3);border-top:1px solid var(--hair2);padding-top:18px">{P.pieLegal} · <a href="/terminos" style="color:inherit">{L.pub.footer.term}</a> · <a href="/privacidad" style="color:inherit">{L.pub.footer.priv}</a></div>
   </div>
 </section>
 

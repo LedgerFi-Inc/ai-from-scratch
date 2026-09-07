@@ -30,8 +30,12 @@ own — it used to, and that is how you lose a colleague's running service.
 
 | You say | Command | What it proves |
 |---|---|---|
-| "check everything", "is it green?" | `pnpm verify` | All 19 gates, one verdict. |
-| "quick check" | `pnpm verify:fast` | Everything that needs no database or server. Prints what it did **not** run. |
+| "check everything", "is it green?" | `pnpm verify` | All gates, one verdict. New: `web-i18n`, `web-unit`, `payments-db`, `backup-restore`, `e2e-journey`. |
+| "quick check" | `pnpm verify:fast` | Everything that needs no database or server. Prints what it did **not** run. CI job `verify-fast` runs this. |
+| "readiness" | `pnpm readiness` | Same as `pnpm verify`. |
+| "production smoke" | `pnpm readiness:prod` / `sh scripts/smoke-prod.sh https://aifromscratch.shop` | Read-only HTTPS checks. Fails closed. |
+| "browser journey" | `pnpm e2e` | Playwright. Fails closed if `/api/health` is down. |
+| "backups" | `sh scripts/backup.sh` then `sh scripts/restore.sh <dump>` | Host dumps; restore is throwaway, never the live DB. |
 | "check the message store" | `pnpm check:messages` | tsgo + document contracts for `messages/`. |
 | "what are the gates?" | `pnpm verify:list` | The list, and which are slow. |
 | "run the tests" | `pnpm test` | The eight api suites. |
@@ -156,7 +160,7 @@ running version silently stops matching the repository.
    | `DEPLOY_PATH` | Directory on the host holding the compose files and `.env`. |
    | `WEB_ORIGIN` | The real public origin. The dev value is `http://localhost:4321`, and a cookie scoped to localhost never arrives — every request would look unauthenticated. |
    | `POSTGRES_PASSWORD` `RABBITMQ_PASSWORD` `JWT_SECRET` `IA_SECRETO` `QUEUE_SECRETO` `DATA_SECRETO` | Same secrets compose already demands. Generate with `pnpm keys`. |
-   | `PAYMENTS_SECRET` `PAYMENTS_DB_PASSWORD` | Service-to-service authentication and the separate payments database. |
+   | `PAYMENTS_SECRET` `PAYMENTS_DB_PASSWORD` `ENTITLEMENTS_SECRET` | Service-to-service authentication and the separate payments database. `ENTITLEMENTS_SECRET` is the bearer payments sends to the api (falls back to `PAYMENTS_SECRET` for one release). |
    | `MP_ACCESS_TOKEN` `MP_WEBHOOK_SECRET` | Required to sell. `MP_PUBLIC_KEY` remains optional. |
    | At least one of `ANTHROPIC_API_KEY` `OPENROUTER_API_KEY` `DEEPSEEK_API_KEY` `KIMI_API_KEY` `HF_TOKEN` `OPENCODE_API_KEY` | Required for the AI assistant; `PROVEEDOR_ORDEN` is optional. Set `PROVEEDOR_ORDEN_ES` and `PROVEEDOR_ORDEN_EN` after measuring the configured models if the first provider should differ by lesson language. |
 

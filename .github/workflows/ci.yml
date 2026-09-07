@@ -426,6 +426,7 @@ jobs:
           IA_SECRETO: ci-only-ephemeral-service-secret-value-32plus
           DATA_SECRETO: ci-ephemeral-data-key-K7f9Qx2mNv4TzB8LrJ3s
           PAYMENTS_SECRET: ci-only-ephemeral-payments-secret-32plus
+          ENTITLEMENTS_SECRET: ci-only-ephemeral-entitlements-secret-32plus
           PAYMENTS_DB_PASSWORD: ci-payments-db-password
           MP_ACCESS_TOKEN: ci-provider-token
           MP_WEBHOOK_SECRET: ci-provider-webhook-secret
@@ -438,3 +439,38 @@ jobs:
           MESSAGES_DB_PASSWORD: ci-messages-db-password
           QUEUE_SECRETO: ci-only-ephemeral-queue-secret-value-32plus
         run: docker compose build
+
+  verify-fast:
+    name: verify --fast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            ${{ env.DIR }}/api/pnpm-lock.yaml
+            ${{ env.DIR }}/web/pnpm-lock.yaml
+            ${{ env.DIR }}/payments/pnpm-lock.yaml
+            ${{ env.DIR }}/messages/pnpm-lock.yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: ${{ env.DIR }}/ai/uv.lock
+      - name: Install
+        working-directory: ${{ env.DIR }}
+        run: pnpm setup
+      - name: verify --fast
+        working-directory: ${{ env.DIR }}
+        env:
+          JWT_SECRET: ci-only-ephemeral-secret-not-used-anywhere-else
+          IA_SECRETO: ci-only-ephemeral-service-secret-value-32plus
+          DATA_SECRETO: ci-ephemeral-data-key-K7f9Qx2mNv4TzB8LrJ3s
+        run: node scripts/verify.mjs --fast

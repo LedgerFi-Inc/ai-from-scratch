@@ -13,6 +13,8 @@
     "stop:web": "pnpm --dir web exec astro dev stop || true",
     "verify": "node scripts/verify.mjs",
     "readiness": "node scripts/verify.mjs",
+    "readiness:prod": "sh scripts/smoke-prod.sh",
+    "e2e": "pnpm --dir web exec playwright test",
     "verify:fast": "node scripts/verify.mjs --fast",
     "verify:list": "node scripts/verify.mjs --list",
     "test": "pnpm --dir api test",

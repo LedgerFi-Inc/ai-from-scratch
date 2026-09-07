@@ -13,7 +13,8 @@
     "check:ts": "tsgo -p tsconfig.tsgo.json",
     "check:astro": "astro check",
     "scenes:check": "node scripts/scenes-check.mjs",
-    "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts"
+    "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.4",
@@ -21,6 +22,7 @@
     "gsap": "^3.12.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@astrojs/check": "^0.9.10",
     "@types/node": "^26.2.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",

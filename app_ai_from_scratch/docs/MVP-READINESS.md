@@ -47,6 +47,15 @@ Safety confirmed: no file outside `payments/**` touched (one line in
 `payments/.env` never read or modified; no `git push`; reflog shows only
 local commits on the track branch.
 
+## Cycle 3 — E2E, legal, CI, mobile (2026-09-07, Grok)
+- Legal: `web/src/data/seller.ts` + `social.ts`; terms PQR section (lawyer O9);
+  PDF copy is Spanish-only until an EN PDF exists; landing footer links terms.
+- Playwright `web/e2e/journey.spec.ts`; gate `e2e-journey` fails closed if api
+  health is down. `scripts/smoke-prod.sh`. CI job `verify-fast`.
+- Compose API/web bind default `127.0.0.1`. Mobile: `docs/readiness/MOBILE.md`
+  **NO-GO for revenue**.
+- Committed cycle 1–2 as `94b13af`. This cycle is the follow-up commit.
+
 ## Cycle 1 — Track B (api/auth/web): IMPLEMENTED on main by Grok 4.6
 agy was still in-progress on `aifs-cycle1-app`. Owner told Grok to do the
 remaining plan on this session. Implemented on `mvp-readiness/2026-09` (not

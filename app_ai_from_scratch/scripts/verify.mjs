@@ -175,6 +175,13 @@ const GATES = [
   { id: 'web-scenes', what: 'every lesson has one scene, no orphans',
     cmd: ['node', ['web/scripts/scenes-check.mjs']] },
 
+  { id: 'e2e-journey', what: 'Playwright landing/registro/pago journey',
+    slow: true, exclusive: 'postgres',
+    cmd: ['sh', ['-c',
+      'curl -fsS --max-time 5 http://127.0.0.1:8787/api/health >/dev/null '
+      + '|| { echo "e2e-journey failed closed: api health down. Start with pnpm dev."; exit 1; }; '
+      + 'pnpm --dir web exec playwright test']] },
+
   // The five lines of defence. Two gates rather than one, deliberately:
   // `security-build` is the ordinary Go suite, and `security-policy` is the leash.
   // Separating them means an operator can see at a glance whether the tests are
