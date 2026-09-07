@@ -33,3 +33,4 @@ const unauthorized = await fetch(`${API}/api/internal/entitlements`, {
 });
 assert.equal(unauthorized.status, 401);
 console.log('internal-edge: cf-ray 404; bad bearer 401');
+process.exit(0);
