@@ -17,7 +17,22 @@ const estado = q.get('collection_status') ?? q.get('status') ?? q.get('estado') 
 const ref = q.get('payment_id') ?? q.get('collection_id') ?? q.get('preference_id') ?? '';
 // La verdad la tiene el webhook, no la query: si users.paid ya está en 1, listo.
 const user = await getUser(Astro.request);
+const API = import.meta.env.API_URL ?? process.env.API_URL ?? 'http://127.0.0.1:8787';
+let grantId: string | null = null;
+let grantAmountMinor: number | null = null;
+if (user) {
+  try {
+    const cookie = Astro.request.headers.get('cookie') ?? '';
+    const sub = await fetch(`${API}/api/subscriptions/me`, { headers: { cookie } });
+    if (sub.ok) {
+      const data = await sub.json() as { grantId?: unknown; grantAmountMinor?: unknown };
+      grantId = data.grantId == null ? null : String(data.grantId);
+      grantAmountMinor = typeof data.grantAmountMinor === 'number' ? data.grantAmountMinor : null;
+    }
+  } catch {}
+}
 const pagado = !!user?.paid;
+const firePurchase = Boolean(grantId && String(ref) === grantId);
 // Pendiente declarado por Mercado Pago (PSE, efectivo, transferencia): no se espera.
 const pendiente = !pagado && /pending|in_process|pendiente/i.test(estado);
 const inicial = pagado ? 'ok' : pendiente ? 'pend' : 'verif';
@@ -57,13 +72,14 @@ const inicial = pagado ? 'ok' : pendiente ? 'pend' : 'verif';
     </div>
   </div>
 
-  <script define:vars={{ P, inicial, ref, moneda: MONEDA, precioMenor: PRECIO_MENOR }}>
+  <script define:vars={{ P, inicial, ref, moneda: MONEDA, precioMenor: PRECIO_MENOR, firePurchase, grantAmountMinor }}>
     // Purchase with the SAME event_id the payments service sends from the
     // webhook (mp:<payment id>): Meta deduplicates and counts one sale, not two.
     // Only once access is confirmed, never on what the query string claims.
     const compra = () => {
-      if (!window.iaTrack || !/^\d+$/.test(String(ref))) return;
-      window.iaTrack('Purchase', { value: precioMenor, currency: moneda, content_name: 'IA desde cero',
+      if (!firePurchase || !window.iaTrack) return;
+      const value = grantAmountMinor == null ? precioMenor : grantAmountMinor;
+      window.iaTrack('Purchase', { value, currency: moneda, content_name: 'IA desde cero',
         content_type: 'product', content_ids: ['curso-v1'], num_items: 1 }, 'mp:' + ref);
     };
     if (inicial === 'ok') compra();

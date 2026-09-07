@@ -114,3 +114,17 @@ export async function loadTurns(userId: number, source: ChatSource, limit = 200)
     return { error: 'messages_unreachable' };
   }
 }
+
+export async function forgetTurns(userId: number): Promise<{ ok: true } | { error: string }> {
+  if (!MESSAGES_URL || !MESSAGES_SECRET) return { error: 'messages_unavailable' };
+  try {
+    const res = await fetch(`${MESSAGES_URL}/v1/turns?userId=${userId}`, {
+      method: 'DELETE', headers: headers(),
+    });
+    if (!res.ok) return { error: `messages_${res.status}` };
+    return { ok: true };
+  } catch (err) {
+    loud('store unreachable on purge', err instanceof Error ? err.message : err);
+    return { error: 'messages_unreachable' };
+  }
+}

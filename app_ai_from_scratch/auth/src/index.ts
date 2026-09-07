@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { COOKIE, ROLES, TOKEN_MINUTES, cookieOpts, hashPassword, hashToken, mandaPlataforma,
+import { COOKIE, POLICY_VERSION, ROLES, TOKEN_MINUTES, cookieOpts, hashPassword, hashToken, mandaPlataforma,
   newToken, satisface, sign, spendKdf, verify, verifyPassword } from './core.ts';
 
 export * from './core.ts';
@@ -30,6 +30,8 @@ export interface AuthDependencies {
   production: boolean;
   log: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
   signal?: (name: string, payload: Record<string, unknown>) => Promise<void> | void;
+  mailer?: { send(input: { to: string; subject: string; text: string }): Promise<void> };
+  forgetTurns?: (userId: number) => Promise<{ ok: true } | { error: string }>;
 }
 
 export interface RequestLike { cookies?: Record<string, string>; headers?: Record<string, unknown>; body?: any }
@@ -130,13 +132,18 @@ export function createAuth(deps: AuthDependencies) {
       return { user: shapeUser(fresh!) };
     });
 
-    app.post('/api/auth/logout', async (_request: RequestLike, reply: ReplyLike) => {
+    app.post('/api/auth/logout', async (request: RequestLike, reply: ReplyLike) => {
+      if (request.body?.todos === true) {
+        const user = await currentUser(request);
+        if (user) await deps.write('auth.revoke_session', {}, user.id);
+      }
       reply.clearCookie(COOKIE, { path: '/' });
       return { ok: true };
     });
 
     app.post('/api/auth/register', async (request: RequestLike, reply: ReplyLike) => {
       const { email, name, password, lang, theme } = request.body ?? {};
+      if (request.body?.acepta !== true) return reply.code(400).send({ error: 'falta_consentimiento' });
       const mail = String(email ?? '').trim().toLowerCase();
       if (!EMAIL_RE.test(mail)) return reply.code(400).send({ error: 'correo_invalido' });
       if (String(name ?? '').trim().length < 2) return reply.code(400).send({ error: 'nombre_corto' });
@@ -147,6 +154,7 @@ export function createAuth(deps: AuthDependencies) {
       const user = await deps.one<AuthUser>('auth.register', {
         login: mail, name: String(name).trim(), password: await hashPassword(String(password)),
         lang: pref(lang, LANGS), theme: pref(theme, THEMES),
+        consent_at: new Date().toISOString(), consent_version: POLICY_VERSION,
       });
       reply.setCookie(COOKIE, sign({ sub: user!.id, role: user!.role, v: user!.token_version }), cookieOpts);
       await emit('auth.account_registered', { subject: String(user!.id), target: String(user!.id) });
@@ -154,6 +162,9 @@ export function createAuth(deps: AuthDependencies) {
     });
 
     app.post('/api/auth/recover', async (request: RequestLike, reply: ReplyLike) => {
+      if (deps.production && !deps.mailer) {
+        return reply.code(503).send({ error: 'correo_no_configurado' });
+      }
       const mail = String(request.body?.email ?? '').trim().toLowerCase();
       const answer = { ok: true, msg: 'Si ese correo tiene cuenta, el enlace ya salió.' };
       if (!EMAIL_RE.test(mail)) return reply.code(400).send({ error: 'correo_invalido' });
@@ -169,7 +180,14 @@ export function createAuth(deps: AuthDependencies) {
       const token = newToken();
       await deps.write('auth.reset_create', { token: hashToken(token), minutes: TOKEN_MINUTES }, user.id);
       const link = `${deps.origin}/recuperar?t=${token}`;
-      deps.log.info({ link }, 'recover: link generated (no mail provider configured)');
+      if (deps.mailer) {
+        await deps.mailer.send({
+          to: mail, subject: 'Recuperar acceso',
+          text: `Abre este enlace para cambiar la clave: ${link}`,
+        });
+      } else {
+        deps.log.info({ link }, 'recover: link generated (no mail provider configured)');
+      }
       return deps.production ? answer : { ...answer, dev_enlace: link };
     });
 
@@ -200,6 +218,10 @@ export function createAuth(deps: AuthDependencies) {
       if (mandaPlataforma(user.role)) {
         const admins = await deps.one<{ c: number }>('auth.admin_count');
         if ((admins?.c ?? 0) <= 1) return reply.code(409).send({ error: 'ultimo_admin', msg: 'No puedes dejar la plataforma sin admins.' });
+      }
+      if (deps.forgetTurns) {
+        const purged = await deps.forgetTurns(user.id);
+        if ('error' in purged) return reply.code(503).send({ error: 'borrado_incompleto' });
       }
       await deps.write('auth.account_delete', { replacement: `borrado+${user.id}@alpadev.local` }, user.id);
       await deps.write('ranking.delete', {}, user.id);

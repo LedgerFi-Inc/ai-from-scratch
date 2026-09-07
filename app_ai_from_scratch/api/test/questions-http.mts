@@ -27,7 +27,7 @@ const suffix = randomBytes(10).toString('hex');
 const register = async (label: string) => {
   const password = `Safe-${randomBytes(12).toString('base64url')}`;
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const r = await req('/api/v3/auth/register', json({ method: 'POST', body: JSON.stringify({ email: `${slug}-${suffix}@example.test`, name: label, password }) }));
+  const r = await req('/api/v3/auth/register', json({ method: 'POST', body: JSON.stringify({ email: `${slug}-${suffix}@example.test`, name: label, password, acepta: true }) }));
   assert.equal(r.status, 201); const sid = cookie(r); assert.ok(sid.length > 20); const u = (await body(r)).user;
   return { sid, id: u.id, password };
 };

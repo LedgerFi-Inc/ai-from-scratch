@@ -214,7 +214,8 @@ export class Store {
          accepted_terms_at=COALESCE(excluded.accepted_terms_at, checkout_contexts.accepted_terms_at),
          terms_version=COALESCE(excluded.terms_version, checkout_contexts.terms_version),
          updated_at=now()`,
-      [userId, email, context.fbp, context.fbc, context.clientIp, context.userAgent, context.sourceUrl, context.utm,
+      [userId, email, context.fbp, context.fbc, context.clientIp, context.userAgent, context.sourceUrl,
+        { ...context.utm, ...(context.noAds ? { no_ads: '1' } : {}) },
         terms?.version ?? null]);
   }
 
@@ -223,9 +224,10 @@ export class Store {
       `SELECT email,fbp,fbc,client_ip,user_agent,source_url,utm FROM checkout_contexts WHERE user_id=$1`, [userId]);
     const row = result.rows[0];
     if (!row) return null;
+    const utm = (row.utm ?? {}) as Record<string, string>;
     return { email: String(row.email), context: {
       fbp: row.fbp ?? null, fbc: row.fbc ?? null, clientIp: row.client_ip ?? null, userAgent: row.user_agent ?? null,
-      sourceUrl: row.source_url ?? null, utm: (row.utm ?? {}) as Record<string, string> } };
+      sourceUrl: row.source_url ?? null, utm, noAds: utm.no_ads === '1' } };
   }
 
   async queueMetaEvent(data: { eventId: string; eventName: string; userId: number; providerId: string;

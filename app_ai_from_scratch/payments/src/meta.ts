@@ -20,6 +20,7 @@ export interface CheckoutContext {
   userAgent: string | null;
   sourceUrl: string | null;
   utm: Record<string, string>;
+  noAds?: boolean;
 }
 
 // Meta's own cookie formats. Anything else is a spoofed cookie and is dropped
@@ -51,6 +52,7 @@ export function sanitizeContext(input: unknown): CheckoutContext {
     userAgent: str(raw.userAgent, 512),
     sourceUrl: url && /^https?:\/\//.test(url) ? url : null,
     utm,
+    noAds: raw.noAds === true,
   };
 }
 

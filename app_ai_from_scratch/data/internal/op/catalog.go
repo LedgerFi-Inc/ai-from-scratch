@@ -801,7 +801,7 @@ var catalog = []Operation{
 	},
 	{
 		Name: "auth.register", Table: "users", Scope: Public, Audience: Internal, Muro: Gratis, Write: true,
-		Raw: "INSERT INTO users (email,name,pass_hash,role,paid,lang,theme) VALUES ($1,$2,$3,'student',0,$4,$5) " +
+		Raw: "INSERT INTO users (email,name,pass_hash,role,paid,lang,theme,consent_at,consent_version) VALUES ($1,$2,$3,'student',0,$4,$5,$6::timestamptz,$7) " +
 			"RETURNING id, email, name, pass_hash, role, lang, theme, paid, cohort, created_at, failed, locked_until, deleted_at, token_version",
 		Returns: []string{"id", "email", "name", "pass_hash", "role", "lang", "theme", "paid", "cohort", "created_at", "failed", "locked_until", "deleted_at", "token_version"},
 		Params: []Param{
@@ -809,6 +809,8 @@ var catalog = []Operation{
 			{Name: "password", Kind: Text, Max: 500},
 			{Name: "lang", Kind: Enum, Allowed: []string{"es", "en", "fr", "pt", "auto"}},
 			{Name: "theme", Kind: Enum, Allowed: []string{"dark", "paper", "auto"}},
+			{Name: "consent_at", Kind: Text, Max: 40},
+			{Name: "consent_version", Kind: Text, Max: 32},
 		},
 		Why:     "create one student account and return it to auth for cookie issuance",
 		Justify: "registration needs the generated id and complete account row to mint the first session. The password hash and internal fields remain inside auth and are removed by shapeUser",

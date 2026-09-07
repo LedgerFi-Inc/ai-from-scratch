@@ -12,7 +12,8 @@
     "i18n": "node --experimental-strip-types scripts/i18n-check.mjs",
     "check:ts": "tsgo -p tsconfig.tsgo.json",
     "check:astro": "astro check",
-    "scenes:check": "node scripts/scenes-check.mjs"
+    "scenes:check": "node scripts/scenes-check.mjs",
+    "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.4",

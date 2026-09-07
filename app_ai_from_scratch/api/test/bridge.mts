@@ -197,7 +197,7 @@ const freeEmail = `paywall-${randomBytes(10).toString('hex')}@example.test`;
 const freePassword = `Safe-${randomBytes(12).toString('base64url')}`;
 const registered = await fetch(`${API}/api/v3/auth/register`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ email: freeEmail, name: 'Paywall Test', password: freePassword }),
+  body: JSON.stringify({ email: freeEmail, name: 'Paywall Test', password: freePassword, acepta: true }),
 });
 const freeSid = (registered.headers.getSetCookie?.() ?? [])
   .map((c) => /(?:^|;\s*)sid=([^;]+)/.exec(c)?.[1]).find(Boolean) ?? '';

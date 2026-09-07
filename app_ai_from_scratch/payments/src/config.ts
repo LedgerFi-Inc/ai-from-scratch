@@ -17,6 +17,8 @@ export interface Config {
   port: number;
   databaseUrl: string;
   serviceSecret: string;
+  /** Bearer sent to the course API entitlements callback. Falls back to PAYMENTS_SECRET. */
+  entitlementsSecret: string;
   mpAccessToken: string | null;
   mpWebhookSecret: string | null;
   mpPublicKey: string | null;
@@ -83,6 +85,8 @@ export function loadConfig(): Config {
     port: Number(process.env.PORT ?? 8785),
     databaseUrl: required('DATABASE_URL'),
     serviceSecret: secret('PAYMENTS_SECRET'),
+    entitlementsSecret: process.env.ENTITLEMENTS_SECRET
+      ? secret('ENTITLEMENTS_SECRET') : secret('PAYMENTS_SECRET'),
     mpAccessToken: token,
     mpWebhookSecret: process.env.MP_WEBHOOK_SECRET || null,
     mpPublicKey: process.env.MP_PUBLIC_KEY || null,

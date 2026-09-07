@@ -23,8 +23,9 @@ import { LEAGUE_ZONE, closeWeek, leaguesState } from './leagues.ts';
 // deleted once nothing imported them. See docs/MIGRATION.md.
 import { catalog, families, run as runTool } from './tools/index.ts';
 import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
-import { loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
+import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
 import { increment, queueState } from './jobs.ts';
+import { clientIp, countWindow, slidingWindowKey } from './brake.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
 
@@ -116,6 +117,35 @@ app.addHook('onRequest', async (req, reply) => {
   if (req.method === 'OPTIONS') reply.code(204).send();
 });
 
+const AUTH_LIMITS: Record<string, number> = {
+  '/api/auth/login': 10,
+  '/api/auth/register': 5,
+  '/api/auth/recover': 5,
+  '/api/auth/reset': 5,
+  '/api/account/delete': 5,
+};
+
+app.addHook('onRequest', async (req, reply) => {
+  if (req.method !== 'POST') return;
+  const path = req.url.split('?')[0]!.replace(/^\/api\/v\d+\//, '/api/');
+  const limit = AUTH_LIMITS[path];
+  if (limit === undefined) return;
+  const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
+  const result = countWindow(slidingWindowKey('auth', `${path}:${ip}`, 60_000), limit, 60_000);
+  if (!result.ok) {
+    reply.header('retry-after', String(result.retryAfterS));
+    return reply.code(429).send({ error: 'too_many_attempts', retryAfterS: result.retryAfterS });
+  }
+});
+
+app.addHook('onRequest', async (req, reply) => {
+  if (!req.headers['cf-ray']) return;
+  const path = req.url.split('?')[0]!.replace(/^\/api\/v\d+\//, '/api/');
+  if (/^\/api\/(interno|internal)(\/|$)/.test(path)) {
+    return reply.code(404).send({ error: 'not_found' });
+  }
+});
+
 // ---------- auth boundary ----------
 // Identity, sessions, account lifecycle and entitlement application live in
 // /auth. This process mounts that module and consumes its guards; it does not
@@ -123,6 +153,7 @@ app.addHook('onRequest', async (req, reply) => {
 const auth = createAuth({
   one, many, write, writeAuthorized,
   origin: ORIGIN, production: process.env.NODE_ENV === 'production', log: app.log,
+  forgetTurns,
   signal: async (signal, payload) => {
     await publishEvent('defense.signal', { signal, ...payload }, {
       key: `defense.signal.${signal}`,
@@ -493,6 +524,10 @@ const MAX_HIST = 24;
 const CHAT_PER_MINUTE = Math.max(1, Number(process.env.CHAT_POR_MINUTO ?? 6));
 const CHAT_DAY_CAP = Math.max(1, Number(process.env.CHAT_TOPE_DIA ?? 120));
 const CHAT_GLOBAL_DAY_CAP = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GLOBAL ?? 4000));
+const CHAT_DAY_CAP_FREE = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GRATIS ?? 20));
+const CHAT_GLOBAL_DAY_CAP_FREE = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GLOBAL_GRATIS ?? 800));
+const CHAT_TOKENS_DAY = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA ?? 200_000));
+const CHAT_TOKENS_DAY_GLOBAL = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA_GLOBAL ?? 5_000_000));
 const WINDOW_MS = 60_000;
 
 const FMT_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: LEAGUE_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -500,6 +535,10 @@ const FMT_TIME = new Intl.DateTimeFormat('en-GB', { timeZone: LEAGUE_ZONE, hourC
 export const leagueDay = (): string => FMT_DAY.format(new Date());
 export const chatDayKey = (userId: number, day = leagueDay()): string => `chat:u${userId}:${day}`;
 export const chatGlobalKey = (day = leagueDay()): string => `chat:global:${day}`;
+export const chatFreeDayKey = (userId: number, day = leagueDay()): string => `chat:free:u${userId}:${day}`;
+export const chatFreeGlobalKey = (day = leagueDay()): string => `chat:free:global:${day}`;
+export const chatTokDayKey = (userId: number, day = leagueDay()): string => `chat:tok:u${userId}:${day}`;
+export const chatTokGlobalKey = (day = leagueDay()): string => `chat:tok:global:${day}`;
 
 /** Seconds until the day rolls over in LEAGUE_ZONE — the retry-after for a daily cap. */
 function secondsToMidnight(): number {
@@ -537,22 +576,24 @@ interface Brake { limite: string; esperaS: number; tope: number; msg: string }
  * rejected message still counts, deliberately: hammering the endpoint after the
  * ceiling must not be free.
  */
-async function chatBrake(userId: number): Promise<Brake | null> {
+async function chatBrake(userId: number, unpaid: boolean): Promise<Brake | null> {
   const min = minuteBucket(userId);
   if (!min.ok) {
     return { limite: 'minuto', esperaS: min.esperaS ?? 1, tope: CHAT_PER_MINUTE,
              msg: 'Vas muy rápido. Espera un momento y vuelve a preguntar.' };
   }
   const day = leagueDay();
-  const own = await increment(chatDayKey(userId, day));
-  if (own > CHAT_DAY_CAP) {
-    return { limite: 'dia', esperaS: secondsToMidnight(), tope: CHAT_DAY_CAP,
+  const dayCap = unpaid ? CHAT_DAY_CAP_FREE : CHAT_DAY_CAP;
+  const globalCap = unpaid ? CHAT_GLOBAL_DAY_CAP_FREE : CHAT_GLOBAL_DAY_CAP;
+  const own = await increment(unpaid ? chatFreeDayKey(userId, day) : chatDayKey(userId, day));
+  if (own > dayCap) {
+    return { limite: 'dia', esperaS: secondsToMidnight(), tope: dayCap,
              msg: 'Llegaste al tope de preguntas de hoy. Mañana se reinicia.' };
   }
-  const global = await increment(chatGlobalKey(day));
-  if (global > CHAT_GLOBAL_DAY_CAP) {
-    app.log.error({ day, global }, 'chat: platform-wide daily cap reached');
-    return { limite: 'dia_global', esperaS: secondsToMidnight(), tope: CHAT_GLOBAL_DAY_CAP,
+  const global = await increment(unpaid ? chatFreeGlobalKey(day) : chatGlobalKey(day));
+  if (global > globalCap) {
+    app.log.error({ day, global, unpaid }, 'chat: platform-wide daily cap reached');
+    return { limite: 'dia_global', esperaS: secondsToMidnight(), tope: globalCap,
              msg: 'El chat alcanzó su tope de hoy para toda la plataforma. Vuelve mañana.' };
   }
   return null;
@@ -748,7 +789,8 @@ app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, r
   // It sits AFTER requireUser so the counter is per person rather than per IP, and
   // BEFORE talkToAi so a refused message costs a Postgres increment instead of
   // four model calls.
-  const brake = await chatBrake(u.id);
+  const unpaid = !u.paid;
+  const brake = await chatBrake(u.id, unpaid);
   if (brake) {
     reply.header('retry-after', String(brake.esperaS));
     return reply.code(429).send({ error: 'demasiadas_preguntas', ...brake });
@@ -764,10 +806,21 @@ app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, r
   const session = req.cookies?.[COOKIE] ?? '';
   if (!session) return reply.code(401).send({ error: 'sin_sesion' });
   const source: ChatSource = req.body?.fuente === 'panel' ? 'panel' : 'chat';
-  const pick = typeof req.body?.proveedor === 'string' ? req.body.proveedor : undefined;
-  const effort = typeof req.body?.esfuerzo === 'string' ? req.body.esfuerzo : undefined;
+  const pick = unpaid ? undefined : (typeof req.body?.proveedor === 'string' ? req.body.proveedor : undefined);
+  const effort = unpaid ? 'bajo' : (typeof req.body?.esfuerzo === 'string' ? req.body.esfuerzo : undefined);
   const r = await talkToAi({ sesion: session, mensajes: messages, lang,
     proveedor: pick, esfuerzo: effort });
+  const used = Array.isArray(r.traza)
+    ? r.traza.reduce((n: number, step: { uso?: unknown }) => n + (Number(step?.uso) || 0), 0)
+    : 0;
+  if (used > 0) {
+    const day = leagueDay();
+    const tokOwn = await increment(chatTokDayKey(u.id, day), used);
+    const tokGlobal = await increment(chatTokGlobalKey(day), used);
+    if (tokOwn > CHAT_TOKENS_DAY || tokGlobal > CHAT_TOKENS_DAY_GLOBAL) {
+      app.log.warn({ userId: u.id, tokOwn, tokGlobal }, 'chat token cap exceeded after call');
+    }
+  }
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   await rememberTurn({
     userId: u.id, source, lang,
@@ -888,6 +941,7 @@ app.get('/api/root/solved-labs', async (req, reply) => {
 // forwards the minimum actor identity required to create or manage checkout.
 const PAYMENTS_URL = (process.env.PAYMENTS_URL ?? '').replace(/\/+$/, '');
 const PAYMENTS_SECRET = process.env.PAYMENTS_SECRET ?? '';
+const ENTITLEMENTS_SECRET = process.env.ENTITLEMENTS_SECRET ?? '';
 
 function paymentsUnavailable(): Response {
   return new Response(JSON.stringify({ error: 'payments_unavailable' }),
@@ -939,13 +993,26 @@ function checkoutContextOf(req: { cookies?: Record<string, string | undefined>; 
     fbp: req.cookies?._fbp ?? null, fbc: req.cookies?._fbc ?? null,
     clientIp: forwarded || req.ip, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 512) || null,
     sourceUrl: `${ORIGIN}/pago`, utm,
+    noAds: req.cookies?.no_ads === '1',
   };
 }
 
-app.post<{ Body: { mode?: unknown; couponCode?: unknown } }>('/api/payments/mercadopago/preference', async (req, reply) => {
+function matchesEntitlementBearer(bearer: string): boolean {
+  const a = ENTITLEMENTS_SECRET;
+  const b = PAYMENTS_SECRET;
+  if (!a && !b) return false;
+  const digest = secretDigest(bearer);
+  const dummy = secretDigest('not-a-configured-entitlements-secret!!');
+  const eqA = timingSafeEqual(digest, a ? secretDigest(a) : dummy);
+  const eqB = timingSafeEqual(digest, b ? secretDigest(b) : dummy);
+  return (Boolean(a) && eqA) || (Boolean(b) && eqB);
+}
+
+app.post<{ Body: { mode?: unknown; couponCode?: unknown; termsVersion?: unknown } }>('/api/payments/mercadopago/preference', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const mode = req.body?.mode === 'subscription' ? 'subscription' : 'one_time';
   const couponCode = typeof req.body?.couponCode === 'string' ? req.body.couponCode : '';
+  const termsVersion = typeof req.body?.termsVersion === 'string' ? req.body.termsVersion.slice(0, 32) : '';
   if (mode === 'subscription') {
     await publishEvent('defense.signal', { signal: 'subscription.checkout_started',
       subject: String(user.id), target: String(user.id) }, {
@@ -954,7 +1021,8 @@ app.post<{ Body: { mode?: unknown; couponCode?: unknown } }>('/api/payments/merc
     });
   }
   const response = await callPayments('/v1/checkout', { method: 'POST', body: JSON.stringify({
-    userId: user.id, email: user.email, mode, ...(couponCode ? { couponCode } : {}), context: checkoutContextOf(req),
+    userId: user.id, email: user.email, mode, termsVersion,
+    ...(couponCode ? { couponCode } : {}), context: checkoutContextOf(req),
   }) });
   return relay(reply, response);
 });
@@ -1000,8 +1068,11 @@ app.post<{ Body: unknown; Querystring: Record<string, string> }>(
 app.post<{ Body: { eventKey?: unknown; userId?: unknown; active?: unknown; source?: unknown;
   externalId?: unknown; occurredAt?: unknown; periodEnd?: unknown } }>('/api/internal/entitlements', async (req, reply) => {
   const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
-  if (!PAYMENTS_SECRET || !timingSafeEqual(secretDigest(bearer), secretDigest(PAYMENTS_SECRET))) {
+  if (!matchesEntitlementBearer(bearer)) {
     return reply.code(401).send({ error: 'unauthorized' });
+  }
+  if (ENTITLEMENTS_SECRET && bearer === PAYMENTS_SECRET && bearer !== ENTITLEMENTS_SECRET) {
+    app.log.warn('entitlements accepted via PAYMENTS_SECRET fallback; set ENTITLEMENTS_SECRET on both sides');
   }
   const body = req.body ?? {};
   const event = { eventKey: String(body.eventKey ?? ''), userId: Number(body.userId),
@@ -1033,6 +1104,41 @@ app.get('/api/version', async () => ({
 app.get('/api/health', async () => {
   const labs = await one<{ c: number }>('lab.count');
   return { ok: true, labs: labs?.c ?? 0, cola: await queueState() };
+});
+
+app.get('/api/alerts', async (req, reply) => {
+  const alerts: string[] = [];
+  try {
+    const labs = await one<{ c: number }>('lab.count');
+    if (labs == null) alerts.push('data_unreachable');
+  } catch {
+    alerts.push('data_unreachable');
+  }
+  try {
+    const pay = await callPayments('/health');
+    if (!pay.ok) alerts.push('payments_unhealthy');
+    else {
+      const body = await pay.json().catch(() => ({})) as { alerts?: Record<string, boolean> };
+      const a = body.alerts ?? {};
+      if (a.deadEvents) alerts.push('payments_dead_events');
+      if (a.stalePendingOver15m) alerts.push('payments_stale_pending');
+      if (a.orphanedApproved) alerts.push('payments_orphans');
+    }
+  } catch {
+    alerts.push('payments_unreachable');
+  }
+  const marker = process.env.BACKUP_MARKER_PATH;
+  if (process.env.NODE_ENV === 'production' && marker) {
+    try {
+      const { statSync } = await import('node:fs');
+      const ageH = (Date.now() - statSync(marker).mtimeMs) / 3_600_000;
+      if (ageH > 36) alerts.push('backup_stale');
+    } catch {
+      alerts.push('backup_missing');
+    }
+  }
+  if (alerts.length) return reply.code(503).send({ ok: false, alerts });
+  return { ok: true, alerts: [] };
 });
 
 // Lapse sweep, hourly, in-process. `users.paid` is a cache recomputed only when a

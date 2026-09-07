@@ -10,6 +10,7 @@ import { t } from '../lib/i18n';
 import { modulos, candidatos, preguntas, micro, ticker } from '../data/landing';
 import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
+import MetaPixel from '../components/MetaPixel.astro';
 
 // La landing era español fijo: lang="es" a mano, la copia escrita a pelo y sin
 // selector de idioma — mientras su propio FAQ prometía que «se cambia de idioma
@@ -74,6 +75,7 @@ const DATOS = {
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>{P.titulo}</title>
+<MetaPixel />
 <meta name="description" content={desc}>
 <link rel="canonical" href={canonical}>
 <meta property="og:site_name" content={MARCA}>

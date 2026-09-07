@@ -88,6 +88,7 @@ services:
       PORT: "8785"
       DATABASE_URL: postgres://payments:${PAYMENTS_DB_PASSWORD:?run scripts/keys.sh first}@payments-db:5432/payments
       PAYMENTS_SECRET: ${PAYMENTS_SECRET:?run scripts/keys.sh first}
+      ENTITLEMENTS_SECRET: ${ENTITLEMENTS_SECRET:-${PAYMENTS_SECRET:?run scripts/keys.sh first}}
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:?configure Mercado Pago first}
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:?configure Mercado Pago first}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
@@ -291,6 +292,7 @@ services:
       # payments service and receives only checkout/entitlement contracts.
       PAYMENTS_URL: http://payments:8785
       PAYMENTS_SECRET: ${PAYMENTS_SECRET:?run scripts/keys.sh first}
+      ENTITLEMENTS_SECRET: ${ENTITLEMENTS_SECRET:-${PAYMENTS_SECRET:?run scripts/keys.sh first}}
       MESSAGES_URL: http://messages:8786
       MESSAGES_SECRET: ${MESSAGES_SECRET:?run scripts/keys.sh first}
       NODE_ENV: production

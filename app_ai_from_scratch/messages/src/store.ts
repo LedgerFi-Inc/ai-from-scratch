@@ -196,5 +196,11 @@ export class Store {
     };
   }
 
+  async purge(userId: number): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM docs WHERE body->>'userId' = $1`, [String(userId)]);
+    return result.rowCount ?? 0;
+  }
+
   async close(): Promise<void> { await this.pool.end(); }
 }

@@ -57,7 +57,7 @@ async function sendEntitlement(userId: number, source: string, externalId: strin
   // periodEnd is what lets the api EXPIRE the access (its lapse sweep only touches rows
   // with a date). Before it travelled, every grant landed as period_end NULL = forever.
   const response = await fetch(config.entitlementsUrl, {
-    method: 'POST', headers: { authorization: `Bearer ${config.serviceSecret}`, 'content-type': 'application/json' },
+    method: 'POST', headers: { authorization: `Bearer ${config.entitlementsSecret}`, 'content-type': 'application/json' },
     body: JSON.stringify({ eventKey, userId, active, source, externalId, occurredAt: new Date().toISOString(),
       ...(periodEnd ? { periodEnd } : {}) }),
   });
@@ -226,6 +226,10 @@ async function processOne(): Promise<boolean> {
 async function queuePurchase(providerId: string, userId: number, item: Record<string, unknown>): Promise<void> {
   if (!meta) return;
   const saved = await store.checkoutContext(userId);
+  if (saved?.context.noAds) {
+    app.log.info({ userId, providerId }, 'meta purchase skipped: no_ads');
+    return;
+  }
   const payer = item.payer as { email?: unknown } | undefined;
   const email = saved?.email ?? (typeof payer?.email === 'string' ? payer.email : null);
   const event = purchaseEvent({ providerId, userId, email,

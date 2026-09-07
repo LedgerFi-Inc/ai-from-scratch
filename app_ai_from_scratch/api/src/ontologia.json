@@ -108,7 +108,10 @@
     "role_audit.id": "jamas",
     "role_audit.to_role": "jamas",
     "role_audit.user_id": "jamas",
+    "users.attribution": "jamas",
     "users.cohort": "propio",
+    "users.consent_at": "propio",
+    "users.consent_version": "propio",
     "users.created_at": "propio",
     "users.deleted_at": "jamas",
     "users.email": "jamas",
@@ -1063,7 +1066,10 @@
     "role_audit.id": "gratis",
     "role_audit.to_role": "gratis",
     "role_audit.user_id": "gratis",
+    "users.attribution": "gratis",
     "users.cohort": "gratis",
+    "users.consent_at": "gratis",
+    "users.consent_version": "gratis",
     "users.created_at": "gratis",
     "users.deleted_at": "gratis",
     "users.email": "gratis",
@@ -1187,14 +1193,15 @@
       "failed",
       "locked_until",
       "deleted_at",
-      "token_version"
+      "token_version",
+      "attribution"
     ]
   },
   "prompt_sha": {
-    "en": "2fe2a3cd3c60",
-    "es": "cc4b82313ede"
+    "en": "bdc442d2088e",
+    "es": "f321741d5147"
   },
-  "sha": "9cc3039a20337c7b",
+  "sha": "60b2d3910c85ab5c",
   "version": 3,
   "violaciones": []
 }

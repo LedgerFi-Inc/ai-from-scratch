@@ -20,10 +20,14 @@ export interface Config {
 }
 
 export function loadConfig(): Config {
+  const databaseUrl = required('DATABASE_URL');
+  if (placeholders.test(databaseUrl)) {
+    throw new Error('DATABASE_URL is a known placeholder; messages refuses to boot');
+  }
   return {
     host: process.env.HOST ?? '127.0.0.1',
     port: Number(process.env.PORT ?? 8786),
-    databaseUrl: required('DATABASE_URL'),
+    databaseUrl,
     serviceSecret: secret('MESSAGES_SECRET'),
   };
 }

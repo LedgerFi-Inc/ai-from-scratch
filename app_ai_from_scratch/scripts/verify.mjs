@@ -146,6 +146,15 @@ const GATES = [
     absentNote: 'no payments service yet',
     cmd: ['sh', ['-c', 'pnpm --dir payments check && pnpm --dir payments test']] },
 
+  { id: 'payments-db', what: 'checkout_orders race and orphan dead-letter against Postgres',
+    slow: true, exclusive: 'postgres',
+    absentIf: () => !existsSync(resolve(ROOT, 'payments/package.json')),
+    absentNote: 'no payments service yet',
+    cmd: ['sh', ['-c',
+      '{ [ -n "$PAYMENTS_TEST_DATABASE_URL" ] || { set -a; . payments/.env; set +a; export PAYMENTS_TEST_DATABASE_URL="$DATABASE_URL"; }; }; '
+      + 'if [ -z "$PAYMENTS_TEST_DATABASE_URL" ]; then echo "PAYMENTS_TEST_DATABASE_URL unset: payments-db gate failed closed"; exit 1; fi; '
+      + 'pnpm --dir payments exec node --experimental-strip-types --test test/db/store.test.ts']] },
+
   { id: 'messages', what: 'tsgo and JSONB document contracts',
     absentIf: () => !existsSync(resolve(ROOT, 'messages/package.json')),
     absentNote: 'no messages service yet',
@@ -153,6 +162,12 @@ const GATES = [
 
   { id: 'web-astro', what: 'astro check',
     cmd: ['pnpm', ['--dir', 'web', 'exec', 'astro', 'check']] },
+
+  { id: 'web-i18n', what: 'every i18n key exists in both languages',
+    cmd: ['pnpm', ['--dir', 'web', 'i18n']] },
+
+  { id: 'web-unit', what: 'attribution and proxy-guard unit tests',
+    cmd: ['pnpm', ['--dir', 'web', 'test']] },
 
   { id: 'web-types', what: 'tsgo, web',
     cmd: ['pnpm', ['--dir', 'web', 'exec', 'tsgo', '-p', 'tsconfig.tsgo.json']] },
@@ -275,6 +290,10 @@ const GATES = [
   // In the postgres group because it reads the same database the api suites
   // mutate. DATABASE_URL comes from the environment in CI and from api/.env on a
   // laptop -- the same two places prisma.config.ts looks.
+  { id: 'backup-restore', what: 'backup drill scripts exist and docker is present',
+    slow: true, exclusive: 'postgres',
+    cmd: ['sh', ['scripts/backup-drill.sh']] },
+
   { id: 'data-smoke', what: 'every operation actually runs and returns what it declares',
     slow: true, exclusive: 'postgres',
     absentIf: () => !existsSync(resolve(ROOT, 'data/go.mod')),

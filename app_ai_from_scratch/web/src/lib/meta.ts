@@ -31,7 +31,7 @@ export function pixelEnabled(request: Request): boolean {
  * buyer without depending on Meta's own attribution.
  */
 export function attributionSnippet(): string {
-  return `(function(){try{var q=new URLSearchParams(location.search),a={},k=['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid'];`
+  return `(function(){if(/(^|; )no_ads=1(;|$)/.test(document.cookie))return;try{var q=new URLSearchParams(location.search),a={},k=['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid'];`
     + `for(var i=0;i<k.length;i++){var v=q.get(k[i]);if(v)a[k[i].replace('utm_','')]=v.slice(0,200);}`
     + `if(!Object.keys(a).length||/(^|; )${COOKIE_ATTR}=/.test(document.cookie))return;`
     + `a.landing=location.pathname.slice(0,120);a.ts=Date.now();`
@@ -40,11 +40,11 @@ export function attributionSnippet(): string {
 
 /** Meta's standard bootstrap plus the `iaTrack` wrapper. The id is validated above. */
 export function pixelSnippet(id: string): string {
-  return `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};`
+  return `if(/(^|; )no_ads=1(;|$)/.test(document.cookie)){window.iaTrack=function(){};}else{!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};`
     + `if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;`
     + `s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');`
     + `fbq('init','${id}');fbq('track','PageView');`
-    + `window.iaTrack=function(n,p,id){try{fbq('track',n,p||{},id?{eventID:id}:undefined)}catch(e){}};`;
+    + `window.iaTrack=function(n,p,id){try{fbq('track',n,p||{},id?{eventID:id}:undefined)}catch(e){}};} `;
 }
 
 export const noopSnippet = (): string => 'window.iaTrack=function(){};';

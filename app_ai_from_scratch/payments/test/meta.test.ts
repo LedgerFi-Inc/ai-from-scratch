@@ -20,7 +20,7 @@ test('sanitizeContext keeps Meta-shaped cookies and drops everything spoofed', (
     fbp: '<script>', fbc: 'fb.1.x.y z', clientIp: '999.1.1.1', userAgent: 'x'.repeat(600),
     sourceUrl: 'javascript:alert(1)', utm: { source: 'y'.repeat(201) },
   });
-  assert.deepEqual(dirty, { fbp: null, fbc: null, clientIp: null, userAgent: null, sourceUrl: null, utm: {} });
+  assert.deepEqual(dirty, { fbp: null, fbc: null, clientIp: null, userAgent: null, sourceUrl: null, utm: {}, noAds: false });
   assert.deepEqual(sanitizeContext(undefined).utm, {});
   assert.deepEqual(sanitizeContext('garbage').utm, {});
 });

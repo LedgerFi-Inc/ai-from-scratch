@@ -180,8 +180,11 @@ const hayCobro = cobros.data?.disponible === true;
       <p class="s" id="coupon-note" hidden style="color:var(--l2)">{P.cuponSub}</p>
       <div id="coupon-status" class="s" role="status" aria-live="polite"></div>
 
+      <label class="consent" for="terms" style="display:flex;gap:10px;align-items:flex-start;margin-top:8px">
+        <input id="terms" type="checkbox" autocomplete="off" style="margin:3px 0 0;accent-color:var(--ac);flex:none">
+        <span class="s">{P.terminosA}<a href="/terminos">{P.terminosL}</a>{P.terminosB}</span>
+      </label>
       <button class="btn pay" id="pay" data-tut="pago-3" style="margin-top:auto">{P.pagarUna}</button>
-      <p class="s" style="text-align:center">{P.terminosA}<a href="/terminos">{P.terminosL}</a>{P.terminosB}</p>
       </Fragment>
       ) : (
       <div class="card" style="border-color:var(--or);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start;margin-top:auto">
@@ -264,6 +267,8 @@ const hayCobro = cobros.data?.disponible === true;
     }));
     document.getElementById('pay').addEventListener('click', async () => {
       if (!logged) { toast('warn', P.sinCuenta, P.sinCuentaB); return; }
+      const terms = document.getElementById('terms');
+      if (terms && !('checked' in terms && terms.checked)) { toast('warn', P.terminosL, P.terminosB); terms.focus(); return; }
       const mode = renew.checked ? 'subscription' : 'one_time';
       // Renovacion encendida sin la casilla marcada: no se cobra. La casilla ES la
       // autorizacion del cobro recurrente; el interruptor solo la hace visible.
@@ -275,7 +280,8 @@ const hayCobro = cobros.data?.disponible === true;
       if (window.iaTrack) window.iaTrack('InitiateCheckout', PRODUCTO);
       const res = await fetch('/api/payments/mercadopago/preference', { method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode, ...(mode === 'one_time' && couponCode() ? { couponCode: couponCode() } : {}) }) });
+        body: JSON.stringify({ mode, termsVersion: '2026-09-07', ...(mode === 'one_time' && couponCode() ? { couponCode: couponCode() } : {}) }) });
+      if (res.status === 429) { toast('warn', 'Espera un momento', 'Demasiados intentos de pago. Reintenta en un minuto.'); return; }
       if (res.status === 422) { toast('bad', P.cuponInvalido, P.cuponInvalidoB); return; }
       // 409 = ya hay una renovacion viva para esta cuenta; el servicio no crea otra.
       if (res.status === 409) { toast('warn', P.yaSuscrito, P.yaSuscritoB); return; }
