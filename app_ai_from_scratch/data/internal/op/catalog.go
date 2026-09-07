@@ -938,8 +938,17 @@ var catalog = []Operation{
 		//
 		// Solo baja accesos, nunca los concede: la rama que pone paid = 1
 		// sigue siendo exclusiva de un evento firmado.
+		//
+		// Y solo cuentas con AL MENOS un evento. Una fila paid = 1 sin eventos
+		// es un acceso concedido por fuera de esta tabla -- compradores de antes
+		// de que existiera (hasta 2026-08-24 el api ponia paid = 1 directo), una
+		// cuenta sembrada, una concesion a mano -- y no tiene nada que caducar.
+		// Sin esa condicion NOT EXISTS es verdadero para «ningun evento», y el
+		// primer barrido tras el despliegue cerraba a todos esos compradores.
 		Name: "auth.entitlement_sweep", Table: "users", Scope: Public, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 AND NOT EXISTS (" +
+		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 " +
+			"AND EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
+			"AND NOT EXISTS (" +
 			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
 			"FROM entitlement_events WHERE user_id = users.id ORDER BY source, external_id, occurred_at DESC, id DESC) e " +
 			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()))",

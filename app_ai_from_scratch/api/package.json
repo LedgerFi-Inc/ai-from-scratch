@@ -29,7 +29,7 @@
     "check": "node scripts/types.mjs",
     "check:list": "node scripts/types.mjs --list",
     "check:pin": "node scripts/types.mjs --pin",
-    "subs:expire": "node --experimental-strip-types scripts/expire-subscriptions.mjs",
+    "subs:expire": "node --experimental-strip-types --env-file-if-exists=.env scripts/expire-subscriptions.mjs",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "db:migrate": "prisma migrate dev",

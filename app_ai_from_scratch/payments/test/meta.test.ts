@@ -33,7 +33,7 @@ test('hashPii normalises case and whitespace the way Meta matches', () => {
 test('purchaseEvent never carries raw PII and shares the browser event id', () => {
   const event = purchaseEvent({
     providerId: '123456789', eventTime: NOW - 60, nowSeconds: NOW, userId: 4001, email: 'Ana@Correo.co',
-    amount: 35_000, currency: 'COP', fallbackUrl: 'https://aidesdecero.shop/pago',
+    amount: 39_900, currency: 'COP', fallbackUrl: 'https://aidesdecero.shop/pago',
     context: { fbp: 'fb.1.1.2', fbc: null, clientIp: '181.55.10.9', userAgent: 'UA', sourceUrl: 'https://aidesdecero.shop/pago?x=1',
       utm: { source: 'meta', campaign: 'cartagena-v8' } },
   });
@@ -51,7 +51,7 @@ test('purchaseEvent never carries raw PII and shares the browser event id', () =
   assert.equal(event.user_data.client_ip_address, '181.55.10.9');
   assert.equal(event.user_data.fbp, 'fb.1.1.2');
   assert.equal('fbc' in event.user_data, false);
-  assert.equal(event.custom_data.value, 35_000);
+  assert.equal(event.custom_data.value, 39_900);
   assert.equal(event.custom_data.currency, 'COP');
   assert.deepEqual(event.custom_data.utm, { source: 'meta', campaign: 'cartagena-v8' });
 });

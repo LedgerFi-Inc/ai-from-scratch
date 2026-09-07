@@ -19,6 +19,7 @@ Everything runs from the repository working directory
 | "run it all in Docker" | `pnpm docker` | Every service containerised, including the workers. Closer to production, no hot reload. |
 | "stop it" | `pnpm stop` | Signals the `pnpm dev` orchestrator so it closes its own children, sweeps whatever it left behind on the three ports, and brings the containers down. Same ownership rule as `pnpm dev`: it never touches a process from another project. |
 | "just the database" | `pnpm db` | Postgres alone, waits for its healthcheck. |
+| "the data service" (login and lessons answer `data is unreachable`) | `cd data && set -a && . ../.env && set +a && DATABASE_URL="postgres://curso:${POSTGRES_PASSWORD}@127.0.0.1:5432/curso" PORT=8788 DATA_ONTOLOGY="$PWD/../api/src/ontologia.json" go run ./cmd/data serve` | `pnpm dev` does not start the Go `data` service, and the compose `data` container publishes no host port, so the local api (`DATA_URL` defaults to `127.0.0.1:8788`) cannot reach it. Run it on the host like this. It refuses to start without the ontology artefact: that is the guard, not a bug. |
 | "the AI chat log" | `pnpm --dir messages dev` | Document store on 8786. Needs `messages-db` (compose, port 5436). |
 
 `pnpm dev` refuses to start if a port is held by a process from another project,
@@ -71,6 +72,15 @@ Then `pnpm ontology:export && pnpm ontology` and commit all three.
 | "open a shell on the db" | `pnpm db:psql` | |
 | "reseed" | `pnpm seed` | Demo accounts only with `SEED_DEMO_USERS=1` and `SEED_DEMO_PASSWORD` set. |
 | "wipe and start over" | `pnpm reset` | **Destructive**: drops the volume, re-migrates, reseeds. |
+
+### Price and access
+
+| You say | Do this | What happens |
+|---|---|---|
+| "change the price" | Edit `payments/src/price.ts` (`PRICE_MINOR`, what Mercado Pago is told) first, then match `web/src/lib/price.ts` (`PRECIO_MENOR`) and `api/src/product.ts` (`monto`, what the agent quotes). Then `node --experimental-strip-types scripts/check-price.mjs` and rewrite every string it lists. Add the OLD price to its `STALE` list, never remove a row. | The gate fails on any drift between charged, advertised and quoted, and on any copy naming a price the product does not sell. It also demands the new price appear in `web/src` copy. |
+| "how long does one payment last?" | `ONE_TIME_DAYS` in `payments/src/price.ts` (30). `ONE_TIME_EXPIRES_FROM` is the cutoff: payments approved before it were sold as «pago único» and never expire. **It must not precede the deploy of the 30-day model**: if the deploy slips past 2026-09-05 00:00 Bogotá, move the constant to the deploy instant first. | `payments/src/entitlement.ts` derives `active` + `periodEnd` per grant (`deriveEntitlementFor`, what each webhook delivery sends to the api) and for the whole account (`deriveEntitlement`, what `/perfil` shows); `pnpm --dir payments test` proves the rules. |
+| "expire lapsed access now" | `pnpm --dir api subs:expire` | Runs `auth.entitlement_sweep` once. The api also runs it every hour in-process (`api/src/server.ts`), so this is for a manual pass or an external scheduler. It only ever revokes, and only accounts that have at least one entitlement event: `paid = 1` with no events (a buyer from before 2026-08-24, a seeded demo, a hand grant) is left alone. Migration `20260905000000_legacy_paid_backfill` records those buyers as perpetual so the promise is in the table, not only in the cache. `api/test/auth-boundary.mts` proves both. |
+| "turn auto-renewal on for a user" | Nothing to do server-side: `/pago` has the switch (off by default). On = Mercado Pago preapproval, monthly; off = one payment, 30 days. Cancel lives in `/perfil` and calls `POST /api/subscriptions/cancel`. | The switch sends `mode: 'subscription' | 'one_time'`; a coupon is only accepted with `one_time` (`coupon_not_applicable` otherwise). |
 
 ### Secrets
 

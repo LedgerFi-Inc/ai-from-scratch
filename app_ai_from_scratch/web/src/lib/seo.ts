@@ -32,7 +32,8 @@ export const curso = (idioma: string) => {
     : ['how a model learns', 'tokens', 'context window', 'temperature', 'hallucinations', 'writing good prompts'],
   offers: {
     '@type': 'Offer', price: PRECIO, priceCurrency: MONEDA, availability: 'https://schema.org/InStock',
-    url: `${SITE}/pago`, category: 'OneTimePayment',
+    // Monthly access, auto-renewal optional at checkout: not a one-time payment any more.
+    url: `${SITE}/pago`, category: 'Subscription',
   },
   hasCourseInstance: {
     '@type': 'CourseInstance', courseMode: 'online', courseWorkload: 'PT5H',

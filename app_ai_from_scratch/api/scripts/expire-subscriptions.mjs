@@ -25,6 +25,11 @@
 // most one hour, which is the staleness we accept for not putting a join on the
 // session read path.
 //
+// SCHEDULED IN-PROCESS since 2026-09-05: api/src/server.ts runs the same op every
+// hour (and once 30 s after boot). The crontab line below was a comment nobody
+// installed, so for months nothing expired anyone. This script stays for running
+// the sweep by hand or from an external scheduler:
+//
 //   crontab -e
 //   7 * * * *  cd /path/to/repo && /usr/local/bin/node --experimental-strip-types app_ai_from_scratch/api/scripts/expire-subscriptions.mjs >> /tmp/subs.log 2>&1
 import { write } from '../src/data.ts';

@@ -94,8 +94,16 @@ const SKIP_FILES = new Set(['api/src/ontologia.json', 'api/src/ontology.json']);
 const STALE = [
   { pattern: /\b9\.99\b/, what: 'the old price 9.99' },
   { pattern: /\bUSD\b/, what: "the old currency 'USD'" },
+  // Scoped to web/src: the lessons in api/src/content.ts say «convierte 30 dólares a
+  // pesos» as course material, which is not a price claim.
+  { pattern: /\bd[oó]lares\b/i, what: "the old currency, spelled out ('dólares')", only: 'web/src' },
   { pattern: /\$49\b/, what: 'the old $49 anchor' },
   { pattern: /\b175[.,]000\b/, what: 'the retired 175.000 anchor' },
+  { pattern: /\b99[.,]999\b/, what: 'the retired 99.999 «antes» anchor (never charged; removed 2026-09-05)' },
+  // (?![.,]\d) so «35.000.000» (a quantity, not a price) does not trip it.
+  { pattern: /\b35[.,]000\b(?![.,]\d)/, what: 'the old price 35.000 (39.900 since 2026-09-05)' },
+  { pattern: /\b35000\b/, what: 'the old price 35000 (39900 since 2026-09-05)' },
+  { pattern: /\bpago [uú]nico\b/i, what: "'pago único': one payment buys 30 days since 2026-09-05" },
   { pattern: /\b(total|discount|price)Cents\b/i, what: 'a *Cents field name (COP has no cents)' },
 ];
 
@@ -183,7 +191,8 @@ for (const dir of COPY_DIRS) {
       ? stripAstro(raw)
       : stripComments(raw);
     lines.forEach((line, i) => {
-      for (const { pattern, what } of STALE) {
+      for (const { pattern, what, only } of STALE) {
+        if (only && !rel(file).startsWith(only)) continue;
         if (pattern.test(line)) {
           note(`${rel(file)}:${i + 1} still names ${what}: ${line.trim().slice(0, 110)}`);
         }
@@ -204,11 +213,11 @@ const COPY = walk(join(ROOT, 'web/src'))
   .map((f) => readFileSync(f, 'utf8'))
   .join('\n');
 
+// No anchor needles since 2026-09-05: the struck-through «antes» price is gone (see
+// web/src/lib/price.ts). If it ever comes back, add its two notations here again.
 for (const [what, needle] of [
   ['the price, Spanish notation', web.PRECIO_TEXTO.es],
   ['the price, English notation', web.PRECIO_TEXTO.en],
-  ['the struck-through anchor, Spanish notation', web.ANCLA_TEXTO.es],
-  ['the struck-through anchor, English notation', web.ANCLA_TEXTO.en],
 ]) {
   if (!COPY.includes(needle)) {
     note(`no copy under web/src contains ${JSON.stringify(needle)} — ${what}. `

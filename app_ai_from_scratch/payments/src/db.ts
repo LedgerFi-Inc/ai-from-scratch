@@ -1,4 +1,6 @@
 import pg from 'pg';
+import { deriveEntitlement, deriveEntitlementFor } from './entitlement.ts';
+import type { EntitlementSource, EntitlementState } from './entitlement.ts';
 import type { CheckoutContext, MetaEvent } from './meta.ts';
 import { PRICE_MINOR } from './price.ts';
 
@@ -358,15 +360,45 @@ export class Store {
     await this.pool.query(`UPDATE coupon_redemptions SET state='released' WHERE id=$1 AND state='reserved'`, [id]);
   }
 
-  async entitlement(userId: number): Promise<boolean> {
+  /**
+   * The rows the access derives from. The rule itself lives in entitlement.ts
+   * (pure, tested); this only fetches. A payment's date is Mercado Pago's
+   * `date_approved`, then `date_created` (set on every Mercado Pago payment, so an
+   * approved row that lost its approval stamp is still dated by the provider, not
+   * by us); a coupon grant has neither and uses the row's write time, which nothing
+   * rewrites once the redemption is final. `updated_at` is NOT the first fallback
+   * for provider rows on purpose: a webhook re-delivery rewrites it, and a legacy
+   * payment re-dated to "now" would fall after the cutoff and lapse in 30 days.
+   * A malformed date fails the query instead of reading as "no date": a payment
+   * that cannot say when it was approved must not become a perpetual grant.
+   */
+  async entitlementSources(userId: number): Promise<EntitlementSource[]> {
     const result = await this.pool.query(
-      `SELECT EXISTS (
-         SELECT 1 FROM payments WHERE user_id=$1 AND status='approved'
-         UNION ALL
-         SELECT 1 FROM subscriptions WHERE user_id=$1 AND status='authorized'
-           AND (current_period_end IS NULL OR current_period_end > now())
-       ) AS active`, [userId]);
-    return Boolean(result.rows[0]?.active);
+      `SELECT 'payment' AS kind, provider_id AS id, status,
+              COALESCE((raw->>'date_approved')::timestamptz, (raw->>'date_created')::timestamptz, updated_at) AS at,
+              updated_at AS seen
+         FROM payments WHERE user_id=$1
+       UNION ALL
+       SELECT 'subscription' AS kind, provider_id AS id, status, current_period_end AS at, updated_at AS seen
+         FROM subscriptions WHERE user_id=$1`, [userId]);
+    return result.rows.map((row) => ({
+      kind: row.kind as EntitlementSource['kind'], id: String(row.id), status: String(row.status),
+      at: row.at ? new Date(row.at) : null, seen: new Date(row.seen),
+    }));
+  }
+
+  /** The user's whole access now and its end: what /perfil shows. */
+  async entitlementState(userId: number): Promise<EntitlementState> {
+    return deriveEntitlement(await this.entitlementSources(userId));
+  }
+
+  /** The state of the ONE grant a delivery is about: what travels to the api (server.ts sendEntitlement). */
+  async entitlementStateFor(userId: number, kind: EntitlementSource['kind'], providerId: string): Promise<EntitlementState> {
+    return deriveEntitlementFor(await this.entitlementSources(userId), kind, providerId);
+  }
+
+  async entitlement(userId: number): Promise<boolean> {
+    return (await this.entitlementState(userId)).active;
   }
 
   async markDelivered(key: string, userId: number, active: boolean): Promise<boolean> {
@@ -382,10 +414,18 @@ export class Store {
          FROM payments ORDER BY updated_at DESC LIMIT $1`, [Math.min(500, Math.max(1, limit))])).rows;
   }
 
+  /**
+   * The subscription that matters: the LIVE one first, then the newest. /perfil's
+   * cancel button and /cancel both act on this row. Newest-only was wrong: a user
+   * who reopened /pago, started a second preapproval and abandoned it had a newer
+   * `pending` row, so /perfil hid the cancel button and /cancel would have
+   * cancelled the abandoned one while the authorized one kept charging.
+   */
   async subscription(userId: number): Promise<unknown | null> {
     return (await this.pool.query(
       `SELECT provider,provider_id,status,current_period_end,cancel_at_period_end,updated_at
-         FROM subscriptions WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 1`, [userId])).rows[0] ?? null;
+         FROM subscriptions WHERE user_id=$1
+        ORDER BY (status = 'authorized') DESC, updated_at DESC LIMIT 1`, [userId])).rows[0] ?? null;
   }
 
   async close(): Promise<void> { await this.pool.end(); }

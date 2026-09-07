@@ -39,12 +39,20 @@ export class EntitlementError extends Error {
 }
 
 async function sendEntitlement(userId: number, source: string, externalId: string, deliveryId: number): Promise<void> {
-  const active = await store.entitlement(userId);
+  // The state of THIS grant, never the user's whole access. The api keeps the latest
+  // state per (source, externalId) and ORs them. Reporting the aggregate under one
+  // key left a cancelled subscription's key saying "active until <the charge's end>",
+  // which outlived the refund of that charge: paid stayed 1 with nothing paid for.
+  const kind = source === 'mercadopago.subscription' ? 'subscription' : 'payment';
+  const { active, periodEnd } = await store.entitlementStateFor(userId, kind, externalId);
   // Stable across retries of this delivery, distinct across real state changes.
   const eventKey = `${source}:${externalId}:${deliveryId}:${active}`;
+  // periodEnd is what lets the api EXPIRE the access (its lapse sweep only touches rows
+  // with a date). Before it travelled, every grant landed as period_end NULL = forever.
   const response = await fetch(config.entitlementsUrl, {
     method: 'POST', headers: { authorization: `Bearer ${config.serviceSecret}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ eventKey, userId, active, source, externalId, occurredAt: new Date().toISOString() }),
+    body: JSON.stringify({ eventKey, userId, active, source, externalId, occurredAt: new Date().toISOString(),
+      ...(periodEnd ? { periodEnd } : {}) }),
   });
   if (!response.ok) throw new EntitlementError(response.status, (await response.text()).slice(0, 300));
   await store.markDelivered(eventKey, userId, active);
@@ -141,6 +149,13 @@ app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode
     return reply.code(400).send({ error: 'invalid_actor' });
   }
   if (couponCode && mode === 'subscription') return reply.code(400).send({ error: 'coupon_not_applicable' });
+  // One live preapproval per account. /pago renders the full checkout for a paying
+  // user too, so without this a subscriber who toggled renewal again created a
+  // second preapproval: two monthly charges, and /perfil can only cancel one.
+  if (mode === 'subscription') {
+    const current = await store.subscription(userId) as { status?: string } | null;
+    if (current?.status === 'authorized') return reply.code(409).send({ error: 'already_subscribed' });
+  }
   // Browser facts the api forwarded (cookies, IP, UA, utm). Validated here, kept
   // for the Purchase event the webhook will send later. Not a reason to refuse
   // a checkout: an empty context only lowers Meta's match quality.
@@ -231,7 +246,9 @@ app.get<{ Params: { userId: string } }>('/v1/subscriptions/:userId', async (requ
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
   const userId = Number(request.params.userId);
   if (!Number.isSafeInteger(userId) || userId < 1) return reply.code(400).send({ error: 'invalid_user' });
-  return { subscription: await store.subscription(userId), active: await store.entitlement(userId) };
+  // periodEnd: when the current access ends (null = never, a pago-único purchase). /perfil
+  // shows it as «se renueva el…» or «vence el…» depending on whether a subscription is live.
+  return { subscription: await store.subscription(userId), ...(await store.entitlementState(userId)) };
 });
 
 app.post<{ Params: { userId: string } }>('/v1/subscriptions/:userId/cancel', async (request, reply) => {
@@ -244,7 +261,7 @@ app.post<{ Params: { userId: string } }>('/v1/subscriptions/:userId/cancel', asy
   await store.upsertSubscription({ providerId: current.provider_id, userId,
     status: String(changed.status ?? 'cancelled'), periodEnd: null, raw: changed });
   await sendEntitlement(userId, 'mercadopago.subscription', current.provider_id, Date.now());
-  return { subscription: await store.subscription(userId), active: await store.entitlement(userId) };
+  return { subscription: await store.subscription(userId), ...(await store.entitlementState(userId)) };
 });
 
 app.get('/v1/admin/payments', async (request, reply) => {

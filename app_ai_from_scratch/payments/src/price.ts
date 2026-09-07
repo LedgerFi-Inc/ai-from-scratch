@@ -26,10 +26,37 @@ export const DECIMALS = 0;
 /**
  * El precio mensual en unidades MENORES de CURRENCY.
  *
- * COP 35.000 al mes. Con DECIMALS = 0, la unidad menor es el peso, así que este
+ * COP 39.900 al mes (antes 35.000; el dueño del producto lo subió el
+ * 2026-09-05). Con DECIMALS = 0, la unidad menor es el peso, así que este
  * número es el precio tal cual.
  */
-export const PRICE_MINOR = 35_000;
+export const PRICE_MINOR = 39_900;
+
+/**
+ * Días de acceso que compra UN pago (modo `one_time`). La suscripción
+ * (`subscription`) renueva sola cada mes y su vencimiento lo dice Mercado Pago
+ * (`next_payment_date`); un pago suelto no tiene quién lo venza, así que el
+ * vencimiento se calcula aquí: fecha de aprobación + ONE_TIME_DAYS.
+ *
+ * 30 y no «un mes»: un cobro el 31 de enero vencería el 3 de marzo si se sumara
+ * un mes de calendario, y la landing promete «el mes que ya pagaste».
+ */
+export const ONE_TIME_DAYS = 30;
+
+/**
+ * Desde cuándo un pago suelto vence. Antes de esta fecha el producto se vendía
+ * como «pago único» con «actualizaciones futuras sin pagar otra vez»
+ * (api/src/product.ts), y quien compró así conserva su acceso: su pago no lleva
+ * vencimiento. Un pago aprobado a partir de aquí compra ONE_TIME_DAYS días.
+ *
+ * Medianoche de Bogotá (UTC-5) del 5 de septiembre, la fecha que citan los
+ * términos. NO puede quedar antes del despliegue de este cambio: quien pagó
+ * viendo «pago único» compró sin vencimiento. Si el despliegue se corre, esta
+ * fecha se corre con él. De los dos errores posibles, un instante posterior al
+ * despliegue regala acceso perpetuo a quien compre entre medias; uno anterior
+ * convierte en 30 días una compra vendida como perpetua. El segundo es el caro.
+ */
+export const ONE_TIME_EXPIRES_FROM = '2026-09-05T05:00:00Z';
 
 /**
  * De unidad menor al importe que espera el proveedor.

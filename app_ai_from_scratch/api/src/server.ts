@@ -1035,6 +1035,29 @@ app.get('/api/health', async () => {
   return { ok: true, labs: labs?.c ?? 0, cola: await queueState() };
 });
 
+// Lapse sweep, hourly, in-process. `users.paid` is a cache recomputed only when a
+// payments webhook arrives; a one-time purchase (30 days) or a subscription the
+// provider stopped talking about would otherwise keep paid = 1 forever. The sweep
+// only ever REVOKES (auth.entitlement_sweep touches paid = 1 rows with no live
+// entitlement) and is idempotent, so several api replicas running it is harmless.
+// It used to live only in api/scripts/expire-subscriptions.mjs, which nothing
+// scheduled: the cron line was a comment. A guard that nobody runs is not a guard.
+const SWEEP_EVERY_MS = 60 * 60 * 1000;
+async function sweepLapsedAccess(): Promise<void> {
+  try {
+    const closed = await write('auth.entitlement_sweep', {});
+    if (closed > 0) app.log.info({ closed }, 'entitlement sweep: access closed for accounts whose last grant expired');
+  } catch (error) {
+    // Loud, not fatal: the next tick retries, and a data outage must not take the api down.
+    app.log.error({ error }, 'entitlement sweep failed');
+  }
+}
+if (process.env.NODE_ENV !== 'test') {
+  const sweep = setInterval(() => { void sweepLapsedAccess(); }, SWEEP_EVERY_MS);
+  sweep.unref();
+  setTimeout(() => { void sweepLapsedAccess(); }, 30_000).unref();  // once at boot, after data is up
+}
+
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? '127.0.0.1';
 app.listen({ port, host }).catch((e: unknown) => { app.log.error(e); process.exit(1); });

@@ -7,7 +7,7 @@ import { grafo, org, curso } from '../lib/seo';
 import { mercadoDe } from '../lib/region';
 import { narrativaDe } from '../lib/narrative';
 import { SITE, MARCA } from '../lib/site';
-import { ANCLA_TEXTO, MONEDA, PRECIO_MENOR, PRECIO_TEXTO } from '../lib/price';
+import { MONEDA, PRECIO_MENOR, PRECIO_TEXTO } from '../lib/price';
 import { TOKENS, PUBLIC_BASE } from '../lib/theme-css';
 import { icon } from '../lib/icons';
 import PrefToggles from '../components/PrefToggles.astro';
@@ -23,10 +23,10 @@ const theme = user ? user.theme : dev.theme;
 const lang = user ? resolveLang(user.lang, Astro.request) : dev.lang;
 const L = t(lang);
 const P = L.pub.pay;
-// El precio y el ancla salen de price.ts, no de un literal por pantalla: esta
-// pagina los pintaba tres veces a mano y el cupon los formateaba una cuarta.
+// El precio sale de price.ts, no de un literal por pantalla: esta pagina lo
+// pintaba tres veces a mano y el cupon lo formateaba una cuarta. El «antes»
+// tachado ya no existe (ver price.ts): nunca se cobro y era un ancla falsa.
 const precio = `${PRECIO_TEXTO[lang] ?? PRECIO_TEXTO.es} ${MONEDA}`;
-const ancla = `${ANCLA_TEXTO[lang] ?? ANCLA_TEXTO.es} ${MONEDA}`;
 const canonical = new URL(Astro.url.pathname, SITE).href;
 // Narrativa según de dónde se conecta: en Colombia hay PSE y efectivo, en la UE
 // manda el retracto de 14 días, y prometer un medio que no existe es peor que callar.
@@ -61,6 +61,11 @@ const hayCobro = cobros.data?.disponible === true;
     .row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--hair2)}
     .coupon{display:flex;gap:8px;margin-top:14px}.coupon input{flex:1;min-width:0;background:transparent;border:1px solid var(--hair);padding:12px;color:var(--l1);font:500 13px/1 var(--m)}
     .coupon button{background:var(--l1);color:var(--bg);border:0;padding:0 14px;font:600 11px/1 var(--m);cursor:pointer}.coupon button:focus-visible,.coupon input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+    /* `hidden` must win over `.coupon{display:flex}` and the consent row's flex: the
+       author rule beats the UA [hidden] rule, so without this the coupon box and the
+       consent checkbox stayed visible with the switch off (measured in the smoke test). */
+    [hidden]{display:none!important}
+    .consent{display:flex;gap:10px;align-items:flex-start;border-top:1px solid var(--hair2);padding-top:10px;cursor:pointer}
     @media(max-width:900px){.coupon{flex-wrap:wrap}.coupon input{min-width:100%;min-height:44px;font-size:16px}.coupon button{min-height:44px;width:100%}}
   </style>
 </head>
@@ -95,7 +100,7 @@ const hayCobro = cobros.data?.disponible === true;
       </div>
       <div style="display:flex;flex-direction:column;border-top:1px solid var(--hair);padding-top:18px">
         <div class="row"><span class="s" style="color:var(--l2)">{P.curso}</span><span class="num" style="font:500 15px/1 var(--m)">{precio}</span></div>
-        <div class="row"><span class="s" style="color:var(--l2)">{P.antes}</span><span class="num s" style="text-decoration:line-through">{ancla}</span></div>
+        <div class="row"><span class="s" style="color:var(--l2)">{P.renovacionRow}</span><span class="s" id="renew-row">{P.renovacionOff}</span></div>
         <div class="row"><span class="s" style="color:var(--l2)">{P.comision}</span><span class="s">{P.comisionV}</span></div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;padding:16px 0 0"><span class="lbl">{P.totalHoy}</span><span class="num" style="font:700 30px/1 var(--f);letter-spacing:-.035em">{precio}</span></div>
       </div>
@@ -146,14 +151,37 @@ const hayCobro = cobros.data?.disponible === true;
         <p class="s" style="color:var(--l2)">{P.pseNota}</p>
       </div>
 
-      <div class="coupon">
+      <!-- Renovacion automatica: OPCIONAL y apagada por defecto. Encendida manda
+           mode=subscription (preapproval de Mercado Pago, cobro mensual hasta
+           cancelar desde /perfil); apagada, un pago de 30 dias. El consentimiento
+           se muestra solo cuando esta encendida: es una autorizacion de cobro
+           recurrente, no letra pequena. -->
+      <div class="card" id="renew" style="display:flex;flex-direction:column;gap:10px">
+        <label for="auto-renew" style="display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer">
+          <span class="h3">{P.renovar}</span>
+          <input id="auto-renew" type="checkbox" role="switch" autocomplete="off" style="width:44px;height:24px;margin:0;accent-color:var(--ac);cursor:pointer">
+        </label>
+        <p class="s" id="renew-help" style="color:var(--l2)">{P.renovarOff}</p>
+        <p class="s" id="renew-card" hidden style="color:var(--or)">{P.renovarTarjeta}</p>
+        <!-- Consentimiento expreso y SEPARADO del interruptor: encender la renovacion
+             dice que la quieres; esta casilla autoriza el cobro recurrente. Sin ella
+             el boton no cobra. Estatuto del Consumidor (Ley 1480): consentimiento
+             expreso, cancelacion por el mismo canal, sin trabas. -->
+        <label id="renew-consent" class="consent" hidden for="consent">
+          <input id="consent" type="checkbox" autocomplete="off" style="margin:3px 0 0;accent-color:var(--ac);flex:none">
+          <span class="s">{P.consent}</span>
+        </label>
+      </div>
+
+      <div class="coupon" id="coupon-box">
         <input id="coupon" type="text" maxlength="64" autocomplete="off" placeholder={P.cuponPh} aria-label={P.cuponLbl}>
         <button id="apply-coupon" type="button">{P.aplicarCupon}</button>
       </div>
+      <p class="s" id="coupon-note" hidden style="color:var(--l2)">{P.cuponSub}</p>
       <div id="coupon-status" class="s" role="status" aria-live="polite"></div>
 
-      <button class="btn pay" id="pay" data-tut="pago-3" style="margin-top:auto">{P.pagar}</button>
-      <p class="s" style="text-align:center">{P.terminos}</p>
+      <button class="btn pay" id="pay" data-tut="pago-3" style="margin-top:auto">{P.pagarUna}</button>
+      <p class="s" style="text-align:center">{P.terminosA}<a href="/terminos">{P.terminosL}</a>{P.terminosB}</p>
       </Fragment>
       ) : (
       <div class="card" style="border-color:var(--or);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start;margin-top:auto">
@@ -187,6 +215,42 @@ const hayCobro = cobros.data?.disponible === true;
     // se llevaba por delante el resto del script, tutorial incluido.
     if (coupon) {
     const couponCode = () => coupon.value.trim();
+    const renew = document.getElementById('auto-renew');
+    const method = () => document.querySelector('[data-m][data-on]')?.dataset.m ?? 'card';
+    // Un solo sitio decide la etiqueta del boton: renovacion encendida manda,
+    // luego el metodo (efectivo genera un cupon de pago, no cobra en linea).
+    const consent = document.getElementById('consent');
+    const paint = () => {
+      const on = renew.checked;
+      document.getElementById('renew-help').textContent = on ? P.renovarOn : P.renovarOff;
+      document.getElementById('renew-consent').hidden = !on;
+      if (!on) consent.checked = false;   // apagarla retira la autorizacion; volver a encenderla la pide de nuevo
+      document.getElementById('renew-row').textContent = on ? P.renovacionOn : P.renovacionOff;
+      // El preapproval de Mercado Pago solo cobra a tarjeta o billetera: con la
+      // renovacion encendida PSE y efectivo se apagan (y si estaba elegido uno
+      // de ellos, vuelve a tarjeta) en vez de dejar elegir un medio que no puede.
+      document.querySelectorAll('[data-m="pse"],[data-m="cash"]').forEach((b) => {
+        b.disabled = on; b.style.opacity = on ? '.45' : '';
+        if (on && b.hasAttribute('data-on')) {
+          b.removeAttribute('data-on');
+          document.querySelector('[data-m="card"]').setAttribute('data-on', '');
+          document.getElementById('pse-note').hidden = true;
+        }
+      });
+      document.getElementById('renew-card').hidden = !on;
+      // El preapproval de Mercado Pago no admite cupon (el servicio responde
+      // coupon_not_applicable): con la renovacion encendida el cupon se esconde
+      // y no se envia, en vez de dejar que el usuario lo escriba y falle al final.
+      document.getElementById('coupon-box').hidden = on;
+      document.getElementById('coupon-note').hidden = !on;
+      document.getElementById('pay').textContent = on ? P.pagarSub : (method() === 'cash' ? P.cupon : P.pagarUna);
+    };
+    renew.addEventListener('change', paint);
+    // Once at load, not only on `change`: Firefox restores checkbox state on
+    // reload/back WITHOUT firing `change`, so the switch could be on while the
+    // row, the button and the consent still showed the one-time state -- and the
+    // pay click would send mode=subscription under a button saying «Pagar … 30 días».
+    paint();
     document.getElementById('apply-coupon').addEventListener('click', () => {
       const code = couponCode();
       couponStatus.textContent = code ? P.cuponListo : P.cuponVacio;
@@ -196,22 +260,33 @@ const hayCobro = cobros.data?.disponible === true;
       document.querySelectorAll('[data-m]').forEach((x) => x.removeAttribute('data-on'));
       b.setAttribute('data-on', '');
       document.getElementById('pse-note').hidden = b.dataset.m !== 'pse';
-      document.getElementById('pay').textContent = b.dataset.m === 'cash' ? P.cupon : P.pagar;
+      paint();
     }));
     document.getElementById('pay').addEventListener('click', async () => {
       if (!logged) { toast('warn', P.sinCuenta, P.sinCuentaB); return; }
+      const mode = renew.checked ? 'subscription' : 'one_time';
+      // Renovacion encendida sin la casilla marcada: no se cobra. La casilla ES la
+      // autorizacion del cobro recurrente; el interruptor solo la hace visible.
+      if (mode === 'subscription' && !consent.checked) {
+        toast('warn', P.renovar, P.consent);
+        document.getElementById('consent').focus();
+        return;
+      }
       if (window.iaTrack) window.iaTrack('InitiateCheckout', PRODUCTO);
       const res = await fetch('/api/payments/mercadopago/preference', { method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ couponCode: couponCode() }) });
+        body: JSON.stringify({ mode, ...(mode === 'one_time' && couponCode() ? { couponCode: couponCode() } : {}) }) });
       if (res.status === 422) { toast('bad', P.cuponInvalido, P.cuponInvalidoB); return; }
+      // 409 = ya hay una renovacion viva para esta cuenta; el servicio no crea otra.
+      if (res.status === 409) { toast('warn', P.yaSuscrito, P.yaSuscritoB); return; }
       // 501 = el servicio de pagos existe pero sin credencial; 503 = el servicio
       // no contesta. Distinta causa, misma consecuencia: hoy no se puede pagar.
       if (res.status === 501 || res.status === 503) { toast('warn', P.sinCred, P.sinCredB); return; }
       if (!res.ok) { toast('bad', P.mpErr, P.mpErrB); return; }
       const result = await res.json();
       if (result.granted) { toast('ok', P.cuponOtorgado, P.cuponOtorgadoB); window.location.assign('/panel'); return; }
-      const { preferenceId, initPoint } = result;
+      // one_time responde preferenceId; subscription (preapproval) responde subscriptionId.
+      const { preferenceId, subscriptionId, initPoint } = result;
       if (!initPoint) { toast('bad', P.mpErr, P.mpErrB); return; }
       // totalMinor viene en unidades MENORES y COP no tiene decimales. El `/100`
       // que habia aqui pintaba «USD 350.00» sobre un cobro real de 35.000 pesos.
@@ -219,7 +294,7 @@ const hayCobro = cobros.data?.disponible === true;
         const total = Number(result.totalMinor).toLocaleString(loc);
         couponStatus.textContent = `${P.descuento}: ${result.discountPercent}% · ${P.total}: ${total} ${moneda}`;
       }
-      toast('info', P.prefOk, preferenceId);
+      toast('info', P.prefOk, preferenceId ?? subscriptionId ?? '');
       window.location.assign(initPoint);
     });
     }

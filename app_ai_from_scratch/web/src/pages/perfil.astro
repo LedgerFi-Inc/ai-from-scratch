@@ -51,18 +51,68 @@ const labPct = prog ? Math.round((prog.solvedLabs / prog.totalLabs) * 100) : 0;
           })}
         </div>
       </div>
-      <div class="card" style="display:flex;flex-direction:column;gap:12px">
-        <p class="lbl">{L.perfil.tuMaterial}</p>
-        <button class="btn ghost" id="pdf-es" style="justify-content:flex-start"><Fragment set:html={icon('pdf', 16)} /><span>{L.perfil.cursoEs}</span></button>
-        <button class="btn ghost" id="pdf-en" style="justify-content:flex-start"><Fragment set:html={icon('pdf', 16)} /><span>{L.perfil.cursoEn}</span></button>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <p class="lbl">{L.perfil.tuMaterial}</p>
+          <button class="btn ghost" id="pdf-es" style="justify-content:flex-start"><Fragment set:html={icon('pdf', 16)} /><span>{L.perfil.cursoEs}</span></button>
+          <button class="btn ghost" id="pdf-en" style="justify-content:flex-start"><Fragment set:html={icon('pdf', 16)} /><span>{L.perfil.cursoEn}</span></button>
+        </div>
+        <!-- Acceso y renovacion. Los terminos prometen «cancelas desde Perfil, en un
+             clic»; hasta el 2026-09-05 ningun boton de la web llamaba a
+             /api/subscriptions/cancel (solo iOS). El texto sale del estado real del
+             servicio de pagos, no de users.paid, que es una cache. -->
+        <div class="card" id="acceso" style="display:flex;flex-direction:column;gap:12px">
+          <p class="lbl">{L.perfil.accesoCap}</p>
+          <p class="s" id="acceso-txt" style="color:var(--l2)">{user!.paid ? L.perfil.comprado : L.perfil.sinAcceso}</p>
+          <button class="btn ghost" id="cancel-renew" hidden style="justify-content:flex-start">{L.perfil.cancelarRenovacion}</button>
+          <a class="btn ghost" id="renew-now" hidden href="/pago" style="justify-content:flex-start;text-decoration:none">{L.perfil.renovarAhora}</a>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- `.btn` paints display:inline-flex, which beats the browser's [hidden] rule; without
+       this the cancel/renew buttons showed for a free account (measured in the smoke test). -->
+  <style>[hidden]{display:none!important}</style>
   <script type="application/json" id="ui-txt" is:inline set:html={jsonSafe(L.ui)}></script>
+  <script type="application/json" id="acceso-i18n" is:inline set:html={jsonSafe({ ...L.perfil, paid: !!user!.paid, loc: resolveLang(user!.lang, Astro.request) === 'en' ? 'en-US' : 'es-CO' })}></script>
 
   <script>
     const U = JSON.parse(document.getElementById('ui-txt')!.textContent!);
+    const A = JSON.parse(document.getElementById('acceso-i18n')!.textContent!);
+    const accesoTxt = document.getElementById('acceso-txt')!;
+    const cancelBtn = document.getElementById('cancel-renew') as HTMLButtonElement;
+    const renewNow = document.getElementById('renew-now')!;
+    const fecha = (iso: string) => new Date(iso).toLocaleDateString(A.loc, { day: 'numeric', month: 'long', year: 'numeric' });
+    type Acceso = { subscription?: { status?: string; current_period_end?: string | null } | null; active?: boolean; periodEnd?: string | null };
+    // Pinta lo que el servicio de pagos sabe: suscripcion viva → fecha de
+    // renovacion y boton de cancelar; pago suelto → fecha de vencimiento y
+    // «renovar»; compra de la era pago unico → sin vencimiento.
+    const pintar = (a: Acceso) => {
+      const sub = a.subscription;
+      const viva = sub?.status === 'authorized';
+      const fin = viva ? (sub?.current_period_end ?? a.periodEnd ?? null) : (a.periodEnd ?? null);
+      // Payments knows nothing about this account but the api says paid (an iOS or
+      // manual grant): keep the server's text and offer nothing to cancel or renew.
+      // Never downgrade what the page already said on the strength of a service that
+      // simply has no row for the user.
+      if (!a.active && A.paid) { cancelBtn.hidden = true; renewNow.hidden = true; return; }
+      if (viva) accesoTxt.textContent = fin ? A.renuevaEl.replace('{fecha}', fecha(fin)) : A.comprado;
+      else if (a.active) accesoTxt.textContent = fin ? A.venceEl.replace('{fecha}', fecha(fin)) : A.sinVencimiento;
+      else accesoTxt.textContent = A.sinAcceso;
+      cancelBtn.hidden = !viva;
+      renewNow.hidden = viva || !a.active || !fin;
+    };
+    // Si el servicio de pagos no contesta, se deja el texto que ya venia del
+    // servidor (comprado / sin acceso) y no se ofrece cancelar lo que no se ve.
+    fetch('/api/subscriptions/me').then(async (r) => { if (r.ok) pintar(await r.json()); }).catch(() => {});
+    cancelBtn.addEventListener('click', async () => {
+      cancelBtn.disabled = true; cancelBtn.textContent = A.cancelando;
+      const r = await fetch('/api/subscriptions/cancel', { method: 'POST' }).catch(() => null);
+      if (r?.ok) { pintar(await r.json()); window.toast('ok', A.cancelarRenovacion, A.cancelada); }
+      else { window.toast('bad', A.cancelarRenovacion, A.cancelarErr); }
+      cancelBtn.disabled = false; cancelBtn.textContent = A.cancelarRenovacion;
+    });
     for (const lang of ['es', 'en']) {
       document.getElementById(`pdf-${lang}`)!.addEventListener('click', async () => {
         const res = await fetch(`/api/pdf/${lang}`);

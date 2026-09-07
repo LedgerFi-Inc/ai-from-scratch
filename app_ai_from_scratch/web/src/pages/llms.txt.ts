@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
-// PRECIO es la forma de schema.org: `35000`, sin separadores, porque un punto de
+// PRECIO es la forma de schema.org: `39900`, sin separadores, porque un punto de
 // millar ahi es un error de parseo para el rastreador. Este fichero es PROSA, asi
-// que usa PRECIO_TEXTO: «COP 35000 al mes» se lee como un numero de serie.
+// que usa PRECIO_TEXTO: «COP 39900 por 30 dias» se lee como un numero de serie.
 import { SITE, MARCA, AUTOR, ORG, CORREO, MONEDA, LECCIONES, LABS } from '../lib/site';
 import { PRECIO_TEXTO } from '../lib/price';
 
@@ -13,7 +13,7 @@ export const prerender = false;
 export const GET: APIRoute = () => {
   const txt = `# ${MARCA}
 
-> Curso de fundamentos de inteligencia artificial para gente sin base técnica, en español e inglés. ${LECCIONES} lecciones y ${LABS} labs interactivos que se resuelven dentro de la lección. Suscripción de ${PRECIO_TEXTO.es} ${MONEDA} al mes, se cancela cuando quieras, devolución de 14 días.
+> Curso de fundamentos de inteligencia artificial para gente sin base técnica, en español e inglés. ${LECCIONES} lecciones y ${LABS} labs interactivos que se resuelven dentro de la lección. ${PRECIO_TEXTO.es} ${MONEDA} por 30 días de acceso; al pagar se elige si se renueva solo cada mes, y la renovación se cancela desde el perfil en un clic. Devolución de 14 días.
 
 Autor: ${AUTOR} (${ORG}), Medellín, Colombia. Contacto: ${CORREO}
 
@@ -43,7 +43,8 @@ Autor: ${AUTOR} (${ORG}), Medellín, Colombia. Contacto: ${CORREO}
 ## Datos exactos, para citar sin inventar
 
 - Idiomas del contenido hoy: español e inglés.
-- Precio: ${PRECIO_TEXTO.es} ${MONEDA} al mes, suscripción. Se cancela cuando quieras.
+- Precio: ${PRECIO_TEXTO.es} ${MONEDA} por 30 días de acceso. La renovación automática es opcional y se elige al pagar; se cancela desde el perfil en un clic y el acceso sigue hasta el final del mes pagado.
+- Incluye mientras el acceso esté activo: los tutoriales, labs, actualizaciones y cursos nuevos que se publiquen.
 - Garantía: 14 días, sin preguntas, por el mismo medio de pago.
 - Método de pago: Mercado Pago (tarjeta, PSE, efectivo, wallet).
 - Requisitos: ninguno. No pide saber programar ni matemáticas.
