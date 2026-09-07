@@ -26,6 +26,7 @@ import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
 import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
 import { increment, queueState } from './jobs.ts';
 import { clientIp, countWindow, slidingWindowKey } from './brake.ts';
+import { mailer } from './mail.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
 
@@ -153,7 +154,7 @@ app.addHook('onRequest', async (req, reply) => {
 const auth = createAuth({
   one, many, write, writeAuthorized,
   origin: ORIGIN, production: process.env.NODE_ENV === 'production', log: app.log,
-  forgetTurns,
+  forgetTurns, mailer,
   signal: async (signal, payload) => {
     await publishEvent('defense.signal', { signal, ...payload }, {
       key: `defense.signal.${signal}`,
