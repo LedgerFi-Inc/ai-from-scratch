@@ -9,8 +9,9 @@
     "build": "tsgo -p tsconfig.json",
     "check": "tsgo -p tsconfig.json --noEmit",
     "start": "node --env-file-if-exists=.env dist/server.js",
-    "test": "node --experimental-strip-types --test test/*.test.ts",
-    "coupon": "node --env-file-if-exists=.env scripts/coupon.mjs"
+    "test": "node --experimental-strip-types --test test/*.test.ts test/db/*.test.ts",
+    "coupon": "node --env-file-if-exists=.env scripts/coupon.mjs",
+    "reconcile": "node --experimental-strip-types scripts/reconcile.mjs"
   },
   "dependencies": {
     "fastify": "^5.12.1",

@@ -1,5 +1,6 @@
 import type { Config } from './config.ts';
 import { CURRENCY, PRICE_MINOR, providerAmount } from './price.ts';
+import type { RemotePayment } from './reconcile.ts';
 
 export interface CheckoutActor { userId: number; email: string }
 export interface CheckoutOffer { totalMinor: number; couponRedemptionId?: number }
@@ -27,6 +28,16 @@ export class MercadoPagoError extends Error {
   }
 }
 
+/**
+ * Mercado Pago preference expiration fields reject the trailing `Z` and want a
+ * numeric UTC offset (`+00:00`). `toISOString()` alone produced undated
+ * preferences that never expired, which is how a discounted checkout link
+ * stayed payable next month.
+ */
+export function mercadoPagoIso(date: Date): string {
+  return date.toISOString().replace(/Z$/, '+00:00');
+}
+
 export class MercadoPago {
   // Campo explicito, no parameter property. `node --experimental-strip-types`
   // (el propio script `dev` de este servicio) no compila `constructor(private
@@ -49,13 +60,20 @@ export class MercadoPago {
     return await response.json() as Record<string, unknown>;
   }
 
-  async checkout(actor: CheckoutActor, mode: CheckoutMode, offer?: CheckoutOffer): Promise<Record<string, unknown>> {
-    const webhook = this.config.publicOrigin.startsWith('https://')
-      ? { notification_url: `${this.config.publicOrigin}/api/payments/mercadopago/webhook?source_news=webhooks` }
+  /**
+   * `orderKey` is the idempotency of this checkout: it is `external_reference`
+   * and `metadata.order_key`, so a webhook that lost `user_id` can still find
+   * the row in `checkout_orders`. Preferences expire in 24 h; without that a
+   * coupon link is a forever-discount.
+   */
+  async checkout(actor: CheckoutActor, mode: CheckoutMode, orderKey: string, offer?: CheckoutOffer): Promise<Record<string, unknown>> {
+    const webhookOrigin = this.config.webhookPublicOrigin;
+    const webhook = webhookOrigin.startsWith('https://')
+      ? { notification_url: `${webhookOrigin}/api/payments/mercadopago/webhook?source_news=webhooks` }
       : {};
     if (mode === 'subscription') {
       const result = await this.request('/preapproval', { method: 'POST', body: JSON.stringify({
-        reason: 'IA desde cero · membresía mensual', external_reference: String(actor.userId),
+        reason: 'IA desde cero · membresía mensual', external_reference: orderKey,
         payer_email: actor.email,
         back_url: `${this.config.publicOrigin}/pago/gracias`,
         // El importe y la moneda salen de price.ts. Con USD 9.99 este endpoint
@@ -65,16 +83,21 @@ export class MercadoPago {
         auto_recurring: { frequency: 1, frequency_type: 'months',
           transaction_amount: providerAmount(PRICE_MINOR), currency_id: CURRENCY },
         status: 'pending',
+        metadata: { user_id: actor.userId, order_key: orderKey },
         ...webhook,
       }) });
       return { mode, subscriptionId: result.id ?? null, initPoint: result.init_point ?? null };
     }
+    const now = new Date();
     const result = await this.request('/checkout/preferences', { method: 'POST', body: JSON.stringify({
       items: [{ title: 'IA desde cero · Fundamentos Vol. 1', quantity: 1,
         unit_price: providerAmount(offer?.totalMinor ?? PRICE_MINOR), currency_id: CURRENCY }],
-      payer: { email: actor.email }, metadata: { user_id: actor.userId,
+      payer: { email: actor.email }, metadata: { user_id: actor.userId, order_key: orderKey,
         ...(offer?.couponRedemptionId ? { coupon_redemption_id: offer.couponRedemptionId } : {}) },
-      external_reference: String(actor.userId),
+      external_reference: orderKey,
+      expires: true,
+      expiration_date_from: mercadoPagoIso(now),
+      expiration_date_to: mercadoPagoIso(new Date(now.getTime() + 86_400_000)),
       back_urls: { success: `${this.config.publicOrigin}/pago/gracias`,
         pending: `${this.config.publicOrigin}/pago/gracias?estado=pendiente`,
         failure: `${this.config.publicOrigin}/pago/error` },
@@ -86,8 +109,37 @@ export class MercadoPago {
   }
 
   payment(id: string): Promise<Record<string, unknown>> { return this.request(`/v1/payments/${encodeURIComponent(id)}`); }
+  /**
+   * Recurring charge resource. Mercado Pago documents both a nested
+   * `payment.id` and a top-level `id`; callers must read whichever is present.
+   */
+  authorizedPayment(id: string): Promise<Record<string, unknown>> {
+    return this.request(`/authorized_payments/${encodeURIComponent(id)}`);
+  }
   subscription(id: string): Promise<Record<string, unknown>> { return this.request(`/preapproval/${encodeURIComponent(id)}`); }
   cancelSubscription(id: string): Promise<Record<string, unknown>> {
     return this.request(`/preapproval/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
+  }
+
+  /**
+   * Payments Mercado Pago updated in a window. Used by reconcileOnce so a
+   * missed webhook is not the last word on an approved charge.
+   */
+  async searchPayments(beginIso: string, endIso: string): Promise<RemotePayment[]> {
+    const query = new URLSearchParams({
+      range: 'date_last_updated',
+      begin_date: beginIso,
+      end_date: endIso,
+      sort: 'date_last_updated',
+      criteria: 'desc',
+      limit: '100',
+    });
+    const data = await this.request(`/v1/payments/search?${query.toString()}`);
+    const results = Array.isArray(data.results) ? data.results as Record<string, unknown>[] : [];
+    return results.map((row) => ({
+      id: String(row.id ?? ''),
+      status: String(row.status ?? 'unknown'),
+      dateLastUpdated: String(row.date_last_updated ?? ''),
+    })).filter((row) => row.id !== '');
   }
 }

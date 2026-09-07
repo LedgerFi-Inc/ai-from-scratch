@@ -1,8 +1,10 @@
 import pg from 'pg';
-import { deriveEntitlement, deriveEntitlementFor } from './entitlement.ts';
+import type { OrderFacts } from './assess.ts';
+import { deriveEntitlement } from './entitlement.ts';
 import type { EntitlementSource, EntitlementState } from './entitlement.ts';
 import type { CheckoutContext, MetaEvent } from './meta.ts';
 import { PRICE_MINOR } from './price.ts';
+import type { LocalPayment } from './reconcile.ts';
 
 const { Pool } = pg;
 
@@ -27,6 +29,19 @@ export interface CouponOffer {
 export interface CouponReservation {
   id: number;
   offer: CouponOffer;
+}
+
+export interface CheckoutOrder extends OrderFacts {
+  mode: 'one_time' | 'subscription';
+  couponRedemptionId: number | null;
+  providerRef: string | null;
+}
+
+export interface QueueCounts {
+  dead: number;
+  pendingOver15m: number;
+  orphanedApproved: number;
+  ineligibleApproved: number;
 }
 
 // El precio vive en src/price.ts, no aqui: la conversion al importe del
@@ -159,17 +174,48 @@ export class Store {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         sent_at TIMESTAMPTZ
       );
+      -- Pedido nuestro, no el preference id de Mercado Pago. Sin esta fila un
+      -- webhook aprobado no tiene importe esperado ni dueño, y un enlace de
+      -- cupón que MP no caducaba se podía pagar otra vez el mes siguiente.
+      -- consumed_by es el candado de un solo uso: el segundo pago aprobado
+      -- contra el mismo order_key pierde, no tira.
+      CREATE TABLE IF NOT EXISTS checkout_orders (
+        order_key TEXT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        mode TEXT NOT NULL CHECK (mode IN ('one_time','subscription')),
+        expected_minor INTEGER NOT NULL CHECK (expected_minor >= 0),
+        currency TEXT NOT NULL,
+        coupon_redemption_id BIGINT,
+        provider_ref TEXT,
+        consumed_by TEXT,
+        consumed_at TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS checkout_orders_ref ON checkout_orders (provider_ref);
+      -- DEFAULT true: las filas ya cobradas (incluidos coupon:<code>:<user>)
+      -- siguen siendo elegibles. NO se rellena a false.
+      ALTER TABLE payments ADD COLUMN IF NOT EXISTS eligible BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE payments ADD COLUMN IF NOT EXISTS ineligible_reason TEXT;
+      ALTER TABLE payments ADD COLUMN IF NOT EXISTS order_key TEXT;
+      ALTER TABLE payments ADD COLUMN IF NOT EXISTS live_mode BOOLEAN;
+      ALTER TABLE checkout_contexts ADD COLUMN IF NOT EXISTS accepted_terms_at TIMESTAMPTZ;
+      ALTER TABLE checkout_contexts ADD COLUMN IF NOT EXISTS terms_version TEXT;
     `);
   }
 
-  async saveCheckoutContext(userId: number, email: string, context: CheckoutContext): Promise<void> {
+  async saveCheckoutContext(userId: number, email: string, context: CheckoutContext, terms?: { version: string }): Promise<void> {
     await this.pool.query(
-      `INSERT INTO checkout_contexts (user_id,email,fbp,fbc,client_ip,user_agent,source_url,utm)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO checkout_contexts (user_id,email,fbp,fbc,client_ip,user_agent,source_url,utm,accepted_terms_at,terms_version)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $9::text IS NULL THEN NULL ELSE now() END,$9)
        ON CONFLICT (user_id) DO UPDATE SET
          email=excluded.email,fbp=excluded.fbp,fbc=excluded.fbc,client_ip=excluded.client_ip,
-         user_agent=excluded.user_agent,source_url=excluded.source_url,utm=excluded.utm,updated_at=now()`,
-      [userId, email, context.fbp, context.fbc, context.clientIp, context.userAgent, context.sourceUrl, context.utm]);
+         user_agent=excluded.user_agent,source_url=excluded.source_url,utm=excluded.utm,
+         accepted_terms_at=COALESCE(excluded.accepted_terms_at, checkout_contexts.accepted_terms_at),
+         terms_version=COALESCE(excluded.terms_version, checkout_contexts.terms_version),
+         updated_at=now()`,
+      [userId, email, context.fbp, context.fbc, context.clientIp, context.userAgent, context.sourceUrl, context.utm,
+        terms?.version ?? null]);
   }
 
   async checkoutContext(userId: number): Promise<{ email: string; context: CheckoutContext } | null> {
@@ -280,14 +326,67 @@ export class Store {
   }
 
   async upsertPayment(data: { providerId: string; userId: number | null; status: string;
-    amount: number; currency: string; raw: unknown }): Promise<void> {
+    amount: number; currency: string; raw: unknown; eligible?: boolean; ineligibleReason?: string | null;
+    orderKey?: string | null; liveMode?: boolean | null }): Promise<void> {
     await this.pool.query(
-      `INSERT INTO payments (provider,provider_id,user_id,status,amount,currency,raw)
-       VALUES ('mercadopago',$1,$2,$3,$4,$5,$6)
+      `INSERT INTO payments (provider,provider_id,user_id,status,amount,currency,raw,eligible,ineligible_reason,order_key,live_mode)
+       VALUES ('mercadopago',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (provider,provider_id) DO UPDATE SET
          user_id=excluded.user_id,status=excluded.status,amount=excluded.amount,
-         currency=excluded.currency,raw=excluded.raw,updated_at=now()`,
-      [data.providerId, data.userId, data.status, data.amount, data.currency, data.raw]);
+         currency=excluded.currency,raw=excluded.raw,eligible=excluded.eligible,
+         ineligible_reason=excluded.ineligible_reason,order_key=excluded.order_key,
+         live_mode=excluded.live_mode,updated_at=now()`,
+      [data.providerId, data.userId, data.status, data.amount, data.currency, data.raw,
+        data.eligible !== false, data.ineligibleReason ?? null, data.orderKey ?? null, data.liveMode ?? null]);
+  }
+
+  /**
+   * Crea el pedido ANTES de llamar a Mercado Pago. Si MP responde y el proceso
+   * muere, el webhook todavía tiene expected_minor y user_id. Reinsertar la
+   * misma clave es un bug del llamador (UUID nuevo por checkout), no un upsert.
+   */
+  async createOrder(data: { orderKey: string; userId: number; mode: 'one_time' | 'subscription';
+    expectedMinor: number; currency: string; couponRedemptionId?: number | null; expiresAt: Date }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO checkout_orders (order_key,user_id,mode,expected_minor,currency,coupon_redemption_id,expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [data.orderKey, data.userId, data.mode, data.expectedMinor, data.currency,
+        data.couponRedemptionId ?? null, data.expiresAt]);
+  }
+
+  async attachOrderRef(orderKey: string, providerRef: string): Promise<void> {
+    await this.pool.query(`UPDATE checkout_orders SET provider_ref=$2 WHERE order_key=$1`, [orderKey, providerRef]);
+  }
+
+  async order(orderKey: string): Promise<CheckoutOrder | null> {
+    const result = await this.pool.query(
+      `SELECT order_key,user_id,mode,expected_minor,currency,coupon_redemption_id,provider_ref,consumed_by,expires_at
+         FROM checkout_orders WHERE order_key=$1`, [orderKey]);
+    const row = result.rows[0];
+    if (!row) return null;
+    const mode = String(row.mode) as CheckoutOrder['mode'];
+    return {
+      orderKey: String(row.order_key), userId: Number(row.user_id), mode,
+      expectedMinor: Number(row.expected_minor), currency: String(row.currency),
+      couponRedemptionId: row.coupon_redemption_id != null ? Number(row.coupon_redemption_id) : null,
+      providerRef: row.provider_ref != null ? String(row.provider_ref) : null,
+      consumedBy: row.consumed_by != null ? String(row.consumed_by) : null,
+      expiresAt: new Date(row.expires_at),
+      singleUse: mode !== 'subscription',
+    };
+  }
+
+  /**
+   * Candado de un solo uso. Cero filas = otro pago ya consumió el pedido: el
+   * llamador marca ineligible (`order_consumed`), no tira. Reentregar EL MISMO
+   * payment id (`consumed_by=$2`) gana otra vez, porque Mercado Pago reintenta.
+   */
+  async consumeOrder(orderKey: string, paymentId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE checkout_orders SET consumed_by=$2, consumed_at=now()
+        WHERE order_key=$1 AND (consumed_by IS NULL OR consumed_by=$2) RETURNING 1`,
+      [orderKey, paymentId]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   async upsertSubscription(data: { providerId: string; userId: number | null; status: string;
@@ -372,18 +471,29 @@ export class Store {
    * A malformed date fails the query instead of reading as "no date": a payment
    * that cannot say when it was approved must not become a perpetual grant.
    */
-  async entitlementSources(userId: number): Promise<EntitlementSource[]> {
+  async entitlementSources(userId: number, filter?: { kind: EntitlementSource['kind']; providerId: string }): Promise<EntitlementSource[]> {
+    // Filter in SQL, not after fetch: a poison `date_approved` on another
+    // (kind, id) of this user used to abort the whole query and block the
+    // grant the delivery was actually about.
+    const paymentPred = !filter ? 'WHERE user_id=$1' : filter.kind === 'payment'
+      ? 'WHERE user_id=$1 AND provider_id=$2' : 'WHERE FALSE';
+    const subPred = !filter ? 'WHERE user_id=$1' : filter.kind === 'subscription'
+      ? 'WHERE user_id=$1 AND provider_id=$2' : 'WHERE FALSE';
+    const params = filter ? [userId, filter.providerId] : [userId];
     const result = await this.pool.query(
       `SELECT 'payment' AS kind, provider_id AS id, status,
               COALESCE((raw->>'date_approved')::timestamptz, (raw->>'date_created')::timestamptz, updated_at) AS at,
-              updated_at AS seen
-         FROM payments WHERE user_id=$1
+              updated_at AS seen, eligible, amount
+         FROM payments ${paymentPred}
        UNION ALL
-       SELECT 'subscription' AS kind, provider_id AS id, status, current_period_end AS at, updated_at AS seen
-         FROM subscriptions WHERE user_id=$1`, [userId]);
+       SELECT 'subscription' AS kind, provider_id AS id, status, current_period_end AS at, updated_at AS seen,
+              TRUE AS eligible,
+              COALESCE((raw->>'transaction_amount')::numeric, 0) AS amount
+         FROM subscriptions ${subPred}`, params);
     return result.rows.map((row) => ({
       kind: row.kind as EntitlementSource['kind'], id: String(row.id), status: String(row.status),
       at: row.at ? new Date(row.at) : null, seen: new Date(row.seen),
+      eligible: row.eligible !== false, amount: Number(row.amount ?? 0),
     }));
   }
 
@@ -394,7 +504,7 @@ export class Store {
 
   /** The state of the ONE grant a delivery is about: what travels to the api (server.ts sendEntitlement). */
   async entitlementStateFor(userId: number, kind: EntitlementSource['kind'], providerId: string): Promise<EntitlementState> {
-    return deriveEntitlementFor(await this.entitlementSources(userId), kind, providerId);
+    return deriveEntitlement(await this.entitlementSources(userId, { kind, providerId }));
   }
 
   async entitlement(userId: number): Promise<boolean> {
@@ -426,6 +536,74 @@ export class Store {
       `SELECT provider,provider_id,status,current_period_end,cancel_at_period_end,updated_at
          FROM subscriptions WHERE user_id=$1
         ORDER BY (status = 'authorized') DESC, updated_at DESC LIMIT 1`, [userId])).rows[0] ?? null;
+  }
+
+  /**
+   * The preapproval a recurring charge belongs to. Used to build the synthetic
+   * OrderFacts for `subscription_authorized_payment` (those webhooks have no
+   * checkout_orders row of their own; many charges share the preapproval).
+   */
+  async subscriptionByProviderId(preapprovalId: string): Promise<{ userId: number | null; expectedMinor: number } | null> {
+    const result = await this.pool.query(
+      `SELECT user_id, raw FROM subscriptions WHERE provider='mercadopago' AND provider_id=$1`,
+      [preapprovalId]);
+    const row = result.rows[0];
+    if (!row) return null;
+    const raw = (row.raw ?? {}) as Record<string, unknown>;
+    const recurring = raw.auto_recurring as { transaction_amount?: unknown } | undefined;
+    const amount = Number(recurring?.transaction_amount ?? raw.transaction_amount ?? PRICE_MINOR);
+    return {
+      userId: row.user_id != null ? Number(row.user_id) : null,
+      expectedMinor: Number.isFinite(amount) ? amount : PRICE_MINOR,
+    };
+  }
+
+  /**
+   * One round-trip for /health and /api/alerts. dead/stale are the queue
+   * backing up; orphanedApproved is the production fact that already happened
+   * (an approved payment with no resolvable user); ineligibleApproved is every
+   * approved row we refused, including orphans.
+   */
+  async queueCounts(): Promise<QueueCounts> {
+    const result = await this.pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM payment_webhook_events WHERE state='dead') AS dead,
+         (SELECT COUNT(*)::int FROM payment_webhook_events
+           WHERE state IN ('pending','processing') AND received_at < now() - interval '15 minutes') AS pending_over_15m,
+         (SELECT COUNT(*)::int FROM payments WHERE status='approved' AND ineligible_reason='no_user') AS orphaned_approved,
+         (SELECT COUNT(*)::int FROM payments WHERE status='approved' AND NOT eligible) AS ineligible_approved`);
+    const row = result.rows[0] ?? {};
+    return {
+      dead: Number(row.dead ?? 0),
+      pendingOver15m: Number(row.pending_over_15m ?? 0),
+      orphanedApproved: Number(row.orphaned_approved ?? 0),
+      ineligibleApproved: Number(row.ineligible_approved ?? 0),
+    };
+  }
+
+  async localPaymentsSince(sinceIso: string): Promise<LocalPayment[]> {
+    const result = await this.pool.query(
+      `SELECT provider_id, status, updated_at FROM payments WHERE updated_at >= $1::timestamptz`,
+      [sinceIso]);
+    return result.rows.map((row) => ({
+      providerId: String(row.provider_id), status: String(row.status),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    }));
+  }
+
+  /**
+   * Re-open dead webhook events except permanent refusals. An orphan has no
+   * user a retry can invent; `no_order` / `order_consumed` are the amount and
+   * single-use guards — redriving them would grant the money we already refused.
+   */
+  async reviveDeadEvents(): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE payment_webhook_events SET state='pending', attempts=0, next_attempt_at=now()
+        WHERE state='dead'
+          AND last_error NOT LIKE 'orphan_payment:%'
+          AND last_error NOT LIKE '%no_order%'
+          AND last_error NOT LIKE '%order_consumed%'`);
+    return result.rowCount ?? 0;
   }
 
   async close(): Promise<void> { await this.pool.end(); }

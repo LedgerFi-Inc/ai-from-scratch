@@ -108,7 +108,8 @@ test('loadConfig refuses half a Meta configuration and a non-numeric dataset id'
   };
   const withEnv = <T>(env: Record<string, string | undefined>, run: () => T): T => {
     const saved = { ...process.env };
-    for (const key of ['META_PIXEL_ID', 'META_CAPI_TOKEN', 'META_TEST_EVENT_CODE']) delete process.env[key];
+    for (const key of ['META_PIXEL_ID', 'META_CAPI_TOKEN', 'META_TEST_EVENT_CODE',
+      'MP_ACCESS_TOKEN', 'MP_ALLOW_LIVE_OUTSIDE_PRODUCTION', 'NODE_ENV']) delete process.env[key];
     Object.assign(process.env, base, env);
     try { return run(); } finally { process.env = saved; }
   };
