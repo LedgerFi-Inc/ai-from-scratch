@@ -6,6 +6,7 @@
 // that this is USEFUL, which is the other half: a safe surface that answers
 // nothing cannot ship either.
 import { get, pool, run } from '../src/db.ts';
+import { PRICE } from '../src/product.ts';
 import { catalog, run as runTool, families } from '../src/tools/index.ts';
 import type { Ctx, ToolResult } from '../src/tools/index.ts';
 import { bus, forgetAll, viewQueue } from '../src/agent-bus.ts';
@@ -143,8 +144,8 @@ ok(paso.hay && paso.lab_id === '1.2', `«¿qué hago ahora?» → el 1.2 (dijo $
 const acceso = await llamar('mi_acceso', {}, 'D');
 ok(Array.isArray(acceso.abiertas) && acceso.abiertas.includes(1), '«¿por qué no puedo abrir la 4?» → lista de abiertas y cerradas');
 const precio = await llamar<PriceResult>('precio_y_compra', {}, 'D');
-ok(precio.precio.monto === 39900 && precio.precio.moneda === 'COP' && precio.garantiaDias === 14,
-   '«¿cuánto cuesta?» → 39.900 COP y 14 días de garantía');
+ok(precio.precio.monto === PRICE.monto && precio.precio.moneda === PRICE.moneda && precio.garantiaDias === PRICE.garantiaDias,
+   `«¿cuánto cuesta?» → ${PRICE.monto.toLocaleString('es-CO')} ${PRICE.moneda} y ${PRICE.garantiaDias} días de garantía`);
 const donde = await llamar('donde_encuentro', { consulta: 'descargar el pdf' }, 'D');
 ok(donde.rutas[0]?.ruta === '/perfil', '«¿dónde descargo el pdf?» → /perfil');
 const sop = await llamar('soporte', { tema: 'pagué y sigue cerrado' }, 'D');
