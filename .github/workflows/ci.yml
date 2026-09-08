@@ -466,7 +466,13 @@ jobs:
           cache-dependency-glob: ${{ env.DIR }}/ai/uv.lock
       - name: Install
         working-directory: ${{ env.DIR }}
-        run: pnpm setup
+        # `pnpm run setup`, never `pnpm setup`. `setup` is a BUILT-IN pnpm
+        # command ("Sets up pnpm") and it shadows the script of the same name,
+        # so `pnpm setup` configured pnpm's own home directory, installed
+        # nothing, and exited 0. The job then failed further down with
+        # `tsgo: not found`, `astro: not found` and "node_modules missing" —
+        # a failure three steps away from its cause. `run` forces the script.
+        run: pnpm run setup
       - name: verify --fast
         working-directory: ${{ env.DIR }}
         env:
