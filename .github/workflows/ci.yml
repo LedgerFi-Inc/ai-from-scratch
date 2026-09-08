@@ -473,6 +473,16 @@ jobs:
         # `tsgo: not found`, `astro: not found` and "node_modules missing" —
         # a failure three steps away from its cause. `run` forces the script.
         run: pnpm run setup
+      - name: Generate Astro types
+        working-directory: ${{ env.DIR }}
+        # `import.meta.env` is typed by .astro/types.d.ts, which `astro sync`
+        # generates and which is not committed. The `web-types` gate runs tsgo
+        # directly, so without this it fails with six
+        # `Property 'env' does not exist on type 'ImportMeta'`. It passes on a
+        # developer machine only because .astro/ is left over from `pnpm dev`.
+        # Not left to the `web-astro` gate: `astro check` does sync, but the
+        # gates run three at a time and nothing orders one before the other.
+        run: pnpm --dir web exec astro sync
       - name: verify --fast
         working-directory: ${{ env.DIR }}
         env:
