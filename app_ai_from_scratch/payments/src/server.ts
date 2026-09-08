@@ -309,7 +309,11 @@ app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode
   if (typeof termsVersion !== 'string' || termsVersion.length < 1 || termsVersion.length > 32) {
     return reply.code(400).send({ error: 'terms_required' });
   }
-  if (couponCode && mode === 'subscription') return reply.code(400).send({ error: 'coupon_not_applicable' });
+  // Cupón en suscripción: SÍ aplica desde 2026-09-07 (antes bloqueado a
+  // propósito con coupon_not_applicable). totalMinor descontado llega igual a
+  // MercadoPago.checkout -> auto_recurring.transaction_amount
+  // (mercadopago.ts:83-94), así que el cobro RECURRENTE queda al precio del
+  // cupón cada mes, no solo el primero -- eso es lo que pidió el dueño.
   // One live preapproval per account. /pago renders the full checkout for a paying
   // user too, so without this a subscriber who toggled renewal again created a
   // second preapproval: two monthly charges, and /perfil can only cancel one.

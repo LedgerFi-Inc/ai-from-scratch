@@ -20,7 +20,7 @@ export const MONEDA = 'COP';
 export const DECIMALES = 0;
 
 /** Monthly price in MINOR units. Must equal PRICE_MINOR in payments/src/price.ts. */
-export const PRECIO_MENOR = 39_900;
+export const PRECIO_MENOR = 39_990;
 
 /**
  * The bare number, no separators: `35000`.

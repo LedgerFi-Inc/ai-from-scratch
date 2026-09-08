@@ -26,11 +26,12 @@ export const DECIMALS = 0;
 /**
  * El precio mensual en unidades MENORES de CURRENCY.
  *
- * COP 39.900 al mes (antes 35.000; el dueño del producto lo subió el
- * 2026-09-05). Con DECIMALS = 0, la unidad menor es el peso, así que este
- * número es el precio tal cual.
+ * COP 39.990 al mes. Historial: 35.000 -> 39.900 (2026-09-05) -> 38.899
+ * (2026-09-07) -> 39.990 (2026-09-08, el dueño del producto lo subió). Con
+ * DECIMALS = 0, la unidad menor es el peso, así que este número es el precio
+ * tal cual.
  */
-export const PRICE_MINOR = 39_900;
+export const PRICE_MINOR = 39_990;
 
 /**
  * Días de acceso que compra UN pago (modo `one_time`). La suscripción
@@ -49,14 +50,20 @@ export const ONE_TIME_DAYS = 30;
  * (api/src/product.ts), y quien compró así conserva su acceso: su pago no lleva
  * vencimiento. Un pago aprobado a partir de aquí compra ONE_TIME_DAYS días.
  *
- * Medianoche de Bogotá (UTC-5) del 5 de septiembre, la fecha que citan los
- * términos. NO puede quedar antes del despliegue de este cambio: quien pagó
+ * Medianoche de Bogotá (UTC-5) del 8 al 9 de septiembre, la fecha que citan los
+ * términos. Movida del 5 al 9 el 2026-09-08 porque el despliegue se corrió: la
+ * versión en producción seguía siendo la del 1 de septiembre, así que entre el
+ * 5 y el 8 nadie llegó a ver «pago único» y dejarla en el 5 habría reclasificado
+ * a 30 días compras hechas bajo los términos viejos. Seguro además por medición:
+ * docs/MVP-READINESS.md:11 (auditoría de la cuenta real de Mercado Pago) —
+ * «Nothing approved since 2026-09-05», no hay comprador que quede colgado.
+ * NO puede quedar antes del despliegue de este cambio: quien pagó
  * viendo «pago único» compró sin vencimiento. Si el despliegue se corre, esta
  * fecha se corre con él. De los dos errores posibles, un instante posterior al
  * despliegue regala acceso perpetuo a quien compre entre medias; uno anterior
  * convierte en 30 días una compra vendida como perpetua. El segundo es el caro.
  */
-export const ONE_TIME_EXPIRES_FROM = '2026-09-05T05:00:00Z';
+export const ONE_TIME_EXPIRES_FROM = '2026-09-09T05:00:00Z';
 
 /**
  * De unidad menor al importe que espera el proveedor.

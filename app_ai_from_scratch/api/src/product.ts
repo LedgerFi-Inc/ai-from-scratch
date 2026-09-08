@@ -60,12 +60,12 @@ export interface SupportEntry {
 }
 
 export const PRICE: Price = {
-  // 39.900 COP al mes. `monto` esta en unidades MAYORES de `moneda`, y COP no
+  // 39.990 COP al mes. `monto` esta en unidades MAYORES de `moneda`, y COP no
   // tiene decimales, asi que el numero es el precio tal cual. Debe coincidir
   // con PRICE_MINOR/CURRENCY en payments/src/price.ts: lo comprueba
   // scripts/check-price.mjs, porque este es el importe que el agente le CITA
   // al estudiante y el otro es el que se le COBRA.
-  monto: 39900,
+  monto: 39990,
   moneda: 'COP',
   // Un pago compra 30 dias. En /pago se elige si se renueva solo cada mes
   // (suscripcion en Mercado Pago, se cancela desde /perfil) o si es un pago

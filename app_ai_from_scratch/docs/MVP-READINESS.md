@@ -78,7 +78,7 @@ session-revocation, registration, brake, data `op` catalogue. Restarted host
 | P1 | landing page has no pixel, no `ia_attr` | `web/src/pages/index.astro` | `<MetaPixel/>` + client no_ads guard | `web/test/attribution.test.mts` | dispatched to Track B | code |
 | P1 | no consent at registration | `auth/src/index.ts:138-154` | `acepta` + `consent_at/version` | `api/test/registration.mts` | dispatched to Track B | code + lawyer (O9) |
 | P1 | account deletion keeps chat log | `messages/src/server.ts` | `DELETE /v1/turns` | — | Cycle 2 | code |
-| P1 | recovery email never sent | `auth/src/index.ts:171-173` | Resend + fail-closed 503 | — | Cycle 2 | code + owner (O5) |
+| P1 | recovery email never sent | `auth/src/index.ts:171-173` | `api/src/mail.ts` (Resend, both-or-neither env) wired into `createAuth({mailer})` | `api/test/mail.mts` (7 cases), `pnpm --dir api check` exit 0, both re-run by Astra | **code done**; DNS not live (see below) | code done; owner (O5 — DNS records) |
 | P1 | chat spend uncapped by tokens; client picks model | `api/src/server.ts:493-495,722` | free lane + token caps | `api/test/chat-brake.mts` | dispatched to Track B | code |
 | P1 | 6 gates skipped in CI | `.github/workflows/ci.yml` | `verify-fast` job | — | Cycle 2/C | code |
 | P1 | no browser E2E | — | Playwright journey gate | — | Cycle 3 | code |
@@ -89,5 +89,34 @@ session-revocation, registration, brake, data `op` catalogue. Restarted host
 | P2 | `ai/.../app.py:84` `!=` compare | one line | `hmac.compare_digest` | — | Cycle 2 | code |
 | P2 | no `og:image`, no social links | `web/src/lib/seo.ts` | og.png + social config | — | Cycle 3 | code + owner (O10) |
 
+## Cycle 2 follow-up — mail (2026-09-07, Astra)
+Resend MCP connected (OAuth, plugin `resend`); domain `aifromscratch.shop`
+already existed in the Resend account (id `cf070a95-…`, region `sa-east-1`,
+sending enabled, receiving disabled, status `not_started` — not created by
+this session). `api/src/mail.ts` added: `Mailer` interface + `resendMailer`
+(plain `fetch` to `api.resend.com/emails`, 10s timeout, no new dependency);
+`loadMailer()` reads `RESEND_API_KEY`+`MAIL_FROM`, both-or-neither, throws at
+boot on a half-set pair or a malformed key/address (mirrors
+`payments/src/config.ts`'s `meta()` pattern) — never silently degrades.
+Wired into `api/src/server.ts` → `createAuth({..., mailer})`; the existing
+fail-closed 503 (`correo_no_configurado`) and dev link-log in
+`auth/src/index.ts:164-192` are unchanged and now actually get a real mailer
+in production once the env vars are set. `.env.example` documents the two
+vars, still empty (no forgeable default). Tests: `api/test/mail.mts` (7
+cases: both-unset no-op, each half-set throws, bad prefix throws, bad email
+throws, real POST shape asserted against a stubbed `fetch`, non-2xx response
+rejects). Verified by Astra: `pnpm --dir api check` exit 0 (0 new type
+errors), `node --experimental-strip-types api/test/mail.mts` exit 0, 7/7.
+Added to `api/package.json`'s `test:direct` chain.
+
+**Not done, and not mine to do**: DNS. `dig NS aifromscratch.shop` confirms
+Cloudflare (`paislee`/`dakota.ns.cloudflare.com`) is authoritative — Hostinger's
+DNS panel for this domain is stale and has zero live effect (checked: its only
+records are a bare `A @` and `CNAME www`, unrelated to the tunnel). No
+Cloudflare MCP/API access this session, so the 3 records Resend requires
+(DKIM TXT `resend._domainkey`, MX+TXT `send` for SPF/return-path) were handed
+to the owner in chat, not written. `verify-domain` not yet triggered — do
+that after the owner confirms the records are live.
+
 ## Owner actions — status
-O1 uplink (open) · O2 rotate passwords (open) · O3 MP TEST creds (open — blocks sandbox matrix) · O4 deploy instant (open — code ready) · O5 Resend+DNS (open) · O6 monitor+Cloudflare rules (open) · O7 R2 bucket (open) · O8 Meta dataset (open) · O9 seller legal data (open) · O10 social URLs (open) · O11 store accounts (open) · O12 LedgerFi remote (open) · O13 JDK install (approved by "procede", not yet run — Cycle 3 mobile).
+O1 uplink (open) · O2 rotate passwords (open) · O3 MP TEST creds (open — blocks sandbox matrix) · O4 deploy instant (open — code ready) · O5 Resend+DNS (**code done**; DNS records identified, owner must add them on Cloudflare — see Cycle 2 follow-up above) · O6 monitor+Cloudflare rules (open) · O7 R2 bucket (open) · O8 Meta dataset (open) · O9 seller legal data (open) · O10 social URLs (open) · O11 store accounts (open) · O12 LedgerFi remote (open) · O13 JDK install (approved by "procede", not yet run — Cycle 3 mobile).

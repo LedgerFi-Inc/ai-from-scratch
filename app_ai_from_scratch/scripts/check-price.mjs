@@ -103,6 +103,10 @@ const STALE = [
   // (?![.,]\d) so «35.000.000» (a quantity, not a price) does not trip it.
   { pattern: /\b35[.,]000\b(?![.,]\d)/, what: 'the old price 35.000 (39.900 since 2026-09-05)' },
   { pattern: /\b35000\b/, what: 'the old price 35000 (39900 since 2026-09-05)' },
+  { pattern: /\b39[.,]900\b/, what: 'the old price 39.900 (38.899 since 2026-09-07)' },
+  { pattern: /\b39900\b/, what: 'the old price 39900 (38899 since 2026-09-07)' },
+  { pattern: /\b38[.,]899\b/, what: 'the old price 38.899 (39.990 since 2026-09-08)' },
+  { pattern: /\b38899\b/, what: 'the old price 38899 (39990 since 2026-09-08)' },
   { pattern: /\bpago [uú]nico\b/i, what: "'pago único': one payment buys 30 days since 2026-09-05" },
   { pattern: /\b(total|discount|price)Cents\b/i, what: 'a *Cents field name (COP has no cents)' },
 ];

@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
-// PRECIO es la forma de schema.org: `39900`, sin separadores, porque un punto de
+// PRECIO es la forma de schema.org: `39990`, sin separadores, porque un punto de
 // millar ahi es un error de parseo para el rastreador. Este fichero es PROSA, asi
-// que usa PRECIO_TEXTO: «COP 39900 por 30 dias» se lee como un numero de serie.
+// que usa PRECIO_TEXTO: «COP 39990 por 30 dias» se lee como un numero de serie.
+// (check-price.mjs no vigila comentarios a proposito, asi que este se actualiza
+// a mano cuando el precio se mueve.)
 import { SITE, MARCA, AUTOR, ORG, CORREO, MONEDA, LECCIONES, LABS } from '../lib/site';
 import { PRECIO_TEXTO } from '../lib/price';
 
