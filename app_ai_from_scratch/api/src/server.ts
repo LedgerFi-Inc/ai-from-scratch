@@ -24,7 +24,8 @@ import { LEAGUE_ZONE, closeWeek, leaguesState } from './leagues.ts';
 import { catalog, families, run as runTool } from './tools/index.ts';
 import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
 import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
-import { increment, queueState } from './jobs.ts';
+import { increment, readCounter, queueState } from './jobs.ts';
+import { tokenCeiling } from './chat-ceiling.ts';
 import { clientIp, countWindow, slidingWindowKey } from './brake.ts';
 import { mailer } from './mail.ts';
 import { coachState } from './coach.ts';
@@ -596,6 +597,27 @@ async function chatBrake(userId: number, unpaid: boolean): Promise<Brake | null>
     app.log.error({ day, global, unpaid }, 'chat: platform-wide daily cap reached');
     return { limite: 'dia_global', esperaS: secondsToMidnight(), tope: globalCap,
              msg: 'El chat alcanzó su tope de hoy para toda la plataforma. Vuelve mañana.' };
+  }
+  // THE TOKEN CEILING, WHICH UNTIL NOW STOPPED NOTHING. CHAT_TOKENS_DAY and
+  // CHAT_TOKENS_DAY_GLOBAL were declared, incremented after each call, compared
+  // once, and the only consequence of exceeding them was an `app.log.warn`
+  // (still below, deliberately: it is the post-call record). Nothing read those
+  // counters before the billed call, so 120 questions a day at `esfuerzo: alto`
+  // on the priciest provider could spend 18x the declared 200 000 per-person
+  // ceiling and the only cap that ever bound was the question COUNT.
+  //
+  // Read, never incremented: a request's cost is unknowable before it runs, so
+  // the gate is "already over the line", checked here, before talkToAi. The
+  // overshoot is bounded by one turn.
+  const tokOwn = await readCounter(chatTokDayKey(userId, day));
+  const tokGlobal = await readCounter(chatTokGlobalKey(day));
+  const tok = tokenCeiling(tokOwn, tokGlobal,
+    { own: CHAT_TOKENS_DAY, global: CHAT_TOKENS_DAY_GLOBAL }, secondsToMidnight());
+  if (tok) {
+    if (tok.limite === 'tokens_dia_global') {
+      app.log.error({ day, tokGlobal }, 'chat: platform-wide token cap reached');
+    }
+    return tok;
   }
   return null;
 }
