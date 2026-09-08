@@ -53,6 +53,9 @@ function sessionKey(): string {
 
 const SECRET = sessionKey();
 
+/** Version of terms/privacy the user accepted at registration. */
+export const POLICY_VERSION = '2026-09-07';
+
 const b64 = (buf: Uint8Array | string): string => Buffer.from(buf as Uint8Array).toString('base64url');
 const unb64 = (s: string): Buffer => Buffer.from(s, 'base64url');
 

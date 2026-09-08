@@ -12,7 +12,8 @@ persistencia separada de pagos, despliegue reproducible y controles de seguridad
   roles, borrado de cuenta, throttling y entitlements.
 - `/payments` no importa código del curso y puede vivir en otro repositorio. Usa
   TypeScript 7 con `tsgo`, una base propia y un secreto de servicio.
-- Checkout de Mercado Pago para pago único y suscripción; el navegador redirige
+- Checkout de Mercado Pago para el pago de 30 días y para la suscripción con
+  renovación automática (el toggle del checkout, apagado por defecto); el navegador redirige
   al `init_point` alojado por el proveedor.
 - Webhook HMAC con ventana anti-replay, deduplicación por entrega firmada,
   reintentos con backoff y conservación de eventos muertos para auditoría.

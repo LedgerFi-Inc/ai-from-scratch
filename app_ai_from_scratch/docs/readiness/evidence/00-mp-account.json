@@ -1,0 +1,64 @@
+{
+  "token_kind": "production",
+  "account": {
+    "http": 200,
+    "id": 339520644,
+    "site_id": "MCO",
+    "site_status": "active",
+    "account_type": "personal",
+    "can_sell": true,
+    "can_list": true,
+    "billing_allow": true,
+    "registration_date": "2020-04-04T23:19:56.000-04:00",
+    "tags": [
+      "normal",
+      "messages_as_seller"
+    ],
+    "user_type": "normal"
+  },
+  "payments": {
+    "http": 200,
+    "total_reported": 18,
+    "fetched": 18,
+    "by_status": {
+      "rejected": 14,
+      "approved": 4
+    },
+    "by_currency": {
+      "COP": 18
+    },
+    "by_live_mode": {
+      "true": 18
+    },
+    "by_operation_type": {
+      "recurring_payment": 1,
+      "regular_payment": 16,
+      "card_validation": 1
+    },
+    "oldest_created": "2025-09-30T16:11:22.000-04:00",
+    "newest_created": "2026-06-18T20:09:23.000-04:00",
+    "approved_count": 4,
+    "approved_amounts": {
+      "18000 COP": 1,
+      "0 COP": 1,
+      "263300 COP": 1,
+      "104703 COP": 1
+    },
+    "approved_since_cutoff": [],
+    "approved_without_user_link": 1,
+    "refunded_or_chargeback": 0
+  },
+  "subscriptions": {
+    "http": 200,
+    "total_reported": 14,
+    "fetched": 14,
+    "by_status": {
+      "pending": 14
+    },
+    "amounts": {
+      "50000 COP": 9,
+      "150000 COP": 4,
+      "35000 COP": 1
+    }
+  }
+}

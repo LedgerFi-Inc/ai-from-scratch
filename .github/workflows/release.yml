@@ -54,7 +54,7 @@ jobs:
           echo "the host's name, and add these Environment secrets on '${{ inputs.environment }}':"
           echo "  DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_PATH"
           echo "  WEB_ORIGIN POSTGRES_PASSWORD RABBITMQ_PASSWORD JWT_SECRET IA_SECRETO"
-          echo "Optional: DEPLOY_PORT, MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, MP_PUBLIC_KEY"
+          echo "Optional: DEPLOY_PORT, MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, MP_PUBLIC_KEY, META_PIXEL_ID, META_CAPI_TOKEN"
           echo
           echo "This fails on purpose. A release job that exits 0 without releasing"
           echo "is the worst outcome available: main goes green, everyone believes"
@@ -137,6 +137,8 @@ jobs:
           MP_ACCESS_TOKEN: ${{ secrets.MP_ACCESS_TOKEN }}
           MP_WEBHOOK_SECRET: ${{ secrets.MP_WEBHOOK_SECRET }}
           MP_PUBLIC_KEY: ${{ secrets.MP_PUBLIC_KEY }}
+          META_PIXEL_ID: ${{ secrets.META_PIXEL_ID }}
+          META_CAPI_TOKEN: ${{ secrets.META_CAPI_TOKEN }}
           DATA_SECRETO: ${{ secrets.DATA_SECRETO }}
           QUEUE_SECRETO: ${{ secrets.QUEUE_SECRETO }}
           PAYMENTS_SECRET: ${{ secrets.PAYMENTS_SECRET }}
@@ -225,6 +227,10 @@ jobs:
             done
             # Optional, so it is not in the derived list: compose defaults it.
             echo "MP_PUBLIC_KEY=$MP_PUBLIC_KEY"
+            # Meta measurement, also optional: empty keeps the pixel and the
+            # Conversions API off. Both or neither -- payments refuses one alone.
+            echo "META_PIXEL_ID=$META_PIXEL_ID"
+            echo "META_CAPI_TOKEN=$META_CAPI_TOKEN"
             # Never plant demo accounts on a host that sells.
             echo "SEED_DEMO_USERS=0"
             if [ -n "${BOOTSTRAP_ROOT_USER}${BOOTSTRAP_ROOT_PASSWORD}" ]; then

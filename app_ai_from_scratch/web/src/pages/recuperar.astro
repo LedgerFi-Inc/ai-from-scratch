@@ -6,6 +6,7 @@ import { t } from '../lib/i18n';
 import { TOKENS, PUBLIC_BASE } from '../lib/theme-css';
 import { icon } from '../lib/icons';
 import PrefToggles from '../components/PrefToggles.astro';
+import MetaPixel from '../components/MetaPixel.astro';
 
 const user = await getUser(Astro.request);
 if (user) return Astro.redirect('/panel');
@@ -21,6 +22,7 @@ const token = new URL(Astro.request.url).searchParams.get('t') ?? '';
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <MetaPixel />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="robots" content="noindex">

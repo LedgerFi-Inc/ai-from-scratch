@@ -88,9 +88,15 @@ services:
       PORT: "8785"
       DATABASE_URL: postgres://payments:${PAYMENTS_DB_PASSWORD:?run scripts/keys.sh first}@payments-db:5432/payments
       PAYMENTS_SECRET: ${PAYMENTS_SECRET:?run scripts/keys.sh first}
+      ENTITLEMENTS_SECRET: ${ENTITLEMENTS_SECRET:-${PAYMENTS_SECRET:?run scripts/keys.sh first}}
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:?configure Mercado Pago first}
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:?configure Mercado Pago first}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      # Meta Conversions API. Empty = purchases are not reported to Meta (warned
+      # once at boot). Setting only one of the two makes payments refuse to start.
+      META_PIXEL_ID: ${META_PIXEL_ID:-}
+      META_CAPI_TOKEN: ${META_CAPI_TOKEN:-}
+      META_TEST_EVENT_CODE: ${META_TEST_EVENT_CODE:-}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:4321}
       ENTITLEMENTS_URL: http://api:8787/api/internal/entitlements
     depends_on:
@@ -286,6 +292,7 @@ services:
       # payments service and receives only checkout/entitlement contracts.
       PAYMENTS_URL: http://payments:8785
       PAYMENTS_SECRET: ${PAYMENTS_SECRET:?run scripts/keys.sh first}
+      ENTITLEMENTS_SECRET: ${ENTITLEMENTS_SECRET:-${PAYMENTS_SECRET:?run scripts/keys.sh first}}
       MESSAGES_URL: http://messages:8786
       MESSAGES_SECRET: ${MESSAGES_SECRET:?run scripts/keys.sh first}
       NODE_ENV: production
@@ -321,7 +328,7 @@ services:
       messages:
         condition: service_healthy
     ports:
-      - "${API_HOST_BIND:-0.0.0.0}:${API_HOST_PORT:-8787}:8787"
+      - "${API_HOST_BIND:-127.0.0.1}:${API_HOST_PORT:-8787}:8787"
     # /api/health touches the labs table, so a green answer means: seed finished,
     # migrations applied, the pool works and the port is bound. That is exactly
     # the gate web needs — without it web served pages mid-seed.
@@ -454,6 +461,9 @@ services:
       HOST: 0.0.0.0
       PORT: "4321"
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      # Same dataset id as payments' META_PIXEL_ID: browser and server events must
+      # land in one dataset or Meta cannot deduplicate them.
+      PUBLIC_META_PIXEL_ID: ${META_PIXEL_ID:-}
       PUBLIC_SITE: ${PUBLIC_SITE:-${PUBLIC_ORIGIN:-http://localhost:4321}}
     depends_on:
       # Was a bare `- api`, i.e. service_started: web accepted traffic while the
@@ -462,7 +472,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${WEB_HOST_BIND:-0.0.0.0}:${WEB_HOST_PORT:-4321}:4321"
+      - "${WEB_HOST_BIND:-127.0.0.1}:${WEB_HOST_PORT:-4321}:4321"
     # /robots.txt is server-rendered but talks to nothing: it proves the Astro
     # node server is answering without making web's health depend on the api a
     # second time (depends_on already does that).

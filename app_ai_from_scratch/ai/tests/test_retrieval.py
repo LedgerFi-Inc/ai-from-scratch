@@ -603,7 +603,9 @@ async def test_the_product_answer_carries_no_price_no_route_and_no_policy():
     # "COP" y el importe entran en la lista al pasar el precio a pesos: una
     # guarda que solo conoce la moneda vieja se queda verde mientras la nueva
     # se filtra por el mismo hueco.
-    for forbidden in ("USD", "COP", "35000", "35.000", "$", "%", "garantia de", "/pago", "dias"):
+    # 39.900 desde 2026-09-05; 35.000 se queda en la lista: un precio viejo que se
+    # filtra es tan grave como el nuevo.
+    for forbidden in ("USD", "COP", "39900", "39.900", "35000", "35.000", "$", "%", "garantia de", "/pago", "dias"):
         assert forbidden not in flat, (forbidden, flat)
     # And no lesson number anywhere in the answer.
     assert "leccion" not in out and "conceptos" not in out, out

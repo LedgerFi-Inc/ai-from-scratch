@@ -4,6 +4,7 @@ import Public from '../layouts/Public.astro';
 import { t } from '../lib/i18n';
 import { publicPrefs } from '../lib/prefs';
 import { grafo, org } from '../lib/seo';
+import { sellerLine } from '../data/seller';
 
 const { lang } = publicPrefs(Astro.request);
 const L = t(lang);
@@ -16,6 +17,7 @@ const P = L.pub.term;
     <h1 class="h1" style="font-size:40px">{P.h1a} <span style="color:var(--l3)">{P.h1b}</span></h1>
     <p class="lbl">{P.act}</p>
     <p class="p" style="max-width:640px;margin-top:8px">{P.intro}</p>
+    <p class="s" style="margin-top:8px">{sellerLine()}</p>
   </div>
 
   {P.secs.map((s, i) => (

@@ -167,7 +167,7 @@ const ROLE_ES = { student: 'Estudiante', tutor: 'Tutor', admin: 'Admin', root: '
     });
 
     document.getElementById('killall')!.addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ todos: true }) });
       window.toast('info', U.sesionesFuera, U.sesionesFueraB);
       setTimeout(() => location.assign('/login'), 600);
     });

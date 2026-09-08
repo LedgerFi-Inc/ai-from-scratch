@@ -181,6 +181,9 @@ TABLES: Mapping[str, Table] = {
             # invalidate every live session for this account. Nothing a model
             # needs, and an undeclared column is one the guard cannot forbid.
             "token_version": _c("jamas", "Contador de invalidacion de sesiones. Solo lo toca auth."),
+            "consent_at": _c("propio", "Cuando la persona acepto terminos y habeas data."),
+            "consent_version": _c("propio", "Version de la politica aceptada."),
+            "attribution": _c("jamas", "UTM de primer toque. Medicion, no ensenanza."),
         },
     ),
     "lessons": Table(

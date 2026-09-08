@@ -26,6 +26,15 @@ app.post<{ Body: Record<string, unknown> }>('/v1/turns', async (request, reply) 
   }
 });
 
+app.delete<{ Querystring: { userId?: string } }>(
+  '/v1/turns', async (request, reply) => {
+    if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+    const userId = actorId(request.query?.userId) ?? actorId(request.headers['x-actor-id']);
+    if (!userId) return reply.code(400).send({ error: 'invalid_actor' });
+    const deleted = await store.purge(userId);
+    return { ok: true, deleted };
+  });
+
 app.get<{ Querystring: { userId?: string; source?: string; limit?: string } }>(
   '/v1/turns', async (request, reply) => {
     if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });

@@ -801,7 +801,7 @@ var catalog = []Operation{
 	},
 	{
 		Name: "auth.register", Table: "users", Scope: Public, Audience: Internal, Muro: Gratis, Write: true,
-		Raw: "INSERT INTO users (email,name,pass_hash,role,paid,lang,theme) VALUES ($1,$2,$3,'student',0,$4,$5) " +
+		Raw: "INSERT INTO users (email,name,pass_hash,role,paid,lang,theme,consent_at,consent_version) VALUES ($1,$2,$3,'student',0,$4,$5,$6::timestamptz,$7) " +
 			"RETURNING id, email, name, pass_hash, role, lang, theme, paid, cohort, created_at, failed, locked_until, deleted_at, token_version",
 		Returns: []string{"id", "email", "name", "pass_hash", "role", "lang", "theme", "paid", "cohort", "created_at", "failed", "locked_until", "deleted_at", "token_version"},
 		Params: []Param{
@@ -809,6 +809,8 @@ var catalog = []Operation{
 			{Name: "password", Kind: Text, Max: 500},
 			{Name: "lang", Kind: Enum, Allowed: []string{"es", "en", "fr", "pt", "auto"}},
 			{Name: "theme", Kind: Enum, Allowed: []string{"dark", "paper", "auto"}},
+			{Name: "consent_at", Kind: Text, Max: 40},
+			{Name: "consent_version", Kind: Text, Max: 32},
 		},
 		Why:     "create one student account and return it to auth for cookie issuance",
 		Justify: "registration needs the generated id and complete account row to mint the first session. The password hash and internal fields remain inside auth and are removed by shapeUser",
@@ -938,8 +940,17 @@ var catalog = []Operation{
 		//
 		// Solo baja accesos, nunca los concede: la rama que pone paid = 1
 		// sigue siendo exclusiva de un evento firmado.
+		//
+		// Y solo cuentas con AL MENOS un evento. Una fila paid = 1 sin eventos
+		// es un acceso concedido por fuera de esta tabla -- compradores de antes
+		// de que existiera (hasta 2026-08-24 el api ponia paid = 1 directo), una
+		// cuenta sembrada, una concesion a mano -- y no tiene nada que caducar.
+		// Sin esa condicion NOT EXISTS es verdadero para «ningun evento», y el
+		// primer barrido tras el despliegue cerraba a todos esos compradores.
 		Name: "auth.entitlement_sweep", Table: "users", Scope: Public, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 AND NOT EXISTS (" +
+		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 " +
+			"AND EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
+			"AND NOT EXISTS (" +
 			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
 			"FROM entitlement_events WHERE user_id = users.id ORDER BY source, external_id, occurred_at DESC, id DESC) e " +
 			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()))",

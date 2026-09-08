@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { isInternal } from '../../lib/proxy-guard';
 
 export const prerender = false;
 
@@ -15,6 +16,7 @@ const conV = (p: string) => (p.startsWith(`${V}/`) || p === V ? p : `${V}/${p}`)
 
 const proxy: APIRoute = async ({ request, params }) => {
   const path = params.path ?? '';
+  if (isInternal(path)) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers: { 'content-type': 'application/json' } });
   const url = new URL(request.url);
   const target = `${API}/api/${conV(path)}${url.search}`;
 

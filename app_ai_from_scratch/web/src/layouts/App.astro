@@ -7,6 +7,7 @@ import { jsonSafe } from '../lib/json-safe';
 import { aiFlags } from '../lib/ai-mode';
 import { sidebarCollapsed, sidebarRail } from '../lib/sidebar';
 import AiPanel from '../components/AiPanel.astro';
+import MetaPixel from '../components/MetaPixel.astro';
 interface Props { user: User; title: string; crumb: string; active: string; }
 const { user, title, crumb, active } = Astro.props;
 
@@ -68,6 +69,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <MetaPixel />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>{title} · IA desde cero</title>

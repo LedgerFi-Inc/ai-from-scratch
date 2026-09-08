@@ -330,7 +330,7 @@ jobs:
             echo "    DATA_SECRETO QUEUE_SECRETO PAYMENTS_SECRET PAYMENTS_DB_PASSWORD"
             echo "    MESSAGES_SECRET MESSAGES_DB_PASSWORD"
             echo
-            echo "Optional: \`DEPLOY_PORT\`, \`MP_ACCESS_TOKEN\`, \`MP_WEBHOOK_SECRET\`, \`MP_PUBLIC_KEY\`."
+            echo "Optional: \`DEPLOY_PORT\`, \`MP_ACCESS_TOKEN\`, \`MP_WEBHOOK_SECRET\`, \`MP_PUBLIC_KEY\`, \`META_PIXEL_ID\`, \`META_CAPI_TOKEN\`."
             echo
             echo "A GitHub-hosted runner has to be able to REACH the host. This one sits"
             echo "behind CGNAT, so that means putting the runner on the tailnet first (or"

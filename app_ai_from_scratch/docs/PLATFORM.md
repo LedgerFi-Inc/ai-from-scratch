@@ -50,7 +50,7 @@ port to the host**: it is internal, not a public API.
 ## One single command
 
 ```bash
-pnpm setup        # installs api/ and web/ (first time only)
+pnpm run setup    # installs api/ and web/ (first time only)
 pnpm dev          # Postgres in Docker + local api and web, with reload
 ```
 

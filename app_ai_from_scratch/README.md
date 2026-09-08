@@ -34,7 +34,7 @@ Levanta la plataforma completa. La siembra corre sola y es idempotente.
 ## Correrlo — modo desarrollo (local, con hot reload)
 
 ```bash
-pnpm setup          # instala deps de api/, payments/, web/ y ai/
+pnpm run setup      # instala deps de api/, payments/, web/ y ai/
 pnpm db              # solo levanta Postgres en Docker
 cp api/.env.example api/.env   # setear JWT_SECRET real
 pnpm seed            # 12 lecciones, 36 labs, 3 usuarios de prueba

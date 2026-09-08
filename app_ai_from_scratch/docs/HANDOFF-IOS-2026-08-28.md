@@ -26,13 +26,14 @@ digital que se consume dentro de la app. El curso lo es. Abrir el checkout de
 Mercado Pago en un `WKWebView` o derivar a Safari es motivo de rechazo conocido.
 
 No es un detalle de implementación: **cambia la pantalla de pago entera y cambia
-el margen.** Sobre 35.000 COP/mes (`payments/src/price.ts:32`):
+el margen.** Sobre 39.900 COP/mes (`payments/src/price.ts`, `PRICE_MINOR`; era
+35.000 hasta el 2026-09-05):
 
 | Vía de cobro | Retención | Neto/mes | Dónde vive el paywall |
 |---|---:|---:|---|
-| Mercado Pago (web, hoy) | ~3–4 % | ~33.700 | Pantalla propia, diseño libre |
-| Compra integrada · SBP 15 % | 15 % | 29.750 | Hoja de sistema, diseño acotado |
-| Compra integrada · 30 % | 30 % | 24.500 | Hoja de sistema, diseño acotado |
+| Mercado Pago (web, hoy) | ~3–4 % | ~38.400 | Pantalla propia, diseño libre |
+| Compra integrada · SBP 15 % | 15 % | 33.915 | Hoja de sistema, diseño acotado |
+| Compra integrada · 30 % | 30 % | 27.930 | Hoja de sistema, diseño acotado |
 
 > **Sin verificar:** la comisión exacta de Mercado Pago en Colombia para
 > suscripciones. El ~3–4 % es un orden de magnitud, no un dato medido. La
@@ -295,9 +296,10 @@ sección *Content voice*). No las reinventes en la app.
   (`Carta|gena` / `Cart|agena`), los juegos se localizan («frío y caliente» → «hot
   and cold») y las escalas numéricas cambian.
 
-Con el precio ocurre lo mismo y es más grave. `$35.000` en español son treinta y
-cinco mil pesos; en inglés `$35,000` se lee treinta y cinco mil **dólares**, mil
-veces el precio. En inglés se escribe `35,000 COP`. La regla vive en
+Con el precio ocurre lo mismo y es más grave. `$39.900` en español son treinta y
+nueve mil novecientos pesos; en inglés `$39,900` se lee treinta y nueve mil
+novecientos **dólares**, mil veces el precio. En inglés se escribe `39,900 COP`.
+La regla vive en
 `web/src/lib/price.ts` (`PRECIO_VISUAL`) y **también aplica en iOS**.
 
 ---

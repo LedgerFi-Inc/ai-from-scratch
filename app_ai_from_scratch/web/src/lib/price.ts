@@ -20,7 +20,7 @@ export const MONEDA = 'COP';
 export const DECIMALES = 0;
 
 /** Monthly price in MINOR units. Must equal PRICE_MINOR in payments/src/price.ts. */
-export const PRECIO_MENOR = 35_000;
+export const PRECIO_MENOR = 39_990;
 
 /**
  * The bare number, no separators: `35000`.
@@ -47,23 +47,15 @@ export const PRECIO_TEXTO: Record<string, string> = {
 };
 
 /**
- * El precio TACHADO que la landing muestra al lado del real.
- *
- * NO es un precio que se haya cobrado nunca: es un ancla de marketing, y estaba
- * escrito a mano como `$49` en cuatro sitios cuando el precio eran USD 9.99.
- * 99.999 lo eligió el dueño del producto, no un ratio.
- *
- * Vive declarado y con nombre precisamente porque es una afirmación sobre el
- * pasado que nadie puede verificar. Si el dueño del producto no quiere sostener
- * ese «antes», se borra de aquí y desaparece de las cuatro pantallas a la vez.
+ * NO HAY PRECIO TACHADO. Hasta el 2026-09-05 la landing y /pago mostraban un
+ * «antes $99.999» junto al precio real. Nunca se cobró: era un ancla de
+ * marketing, y un precio de referencia que no existió es exactamente lo que la
+ * Ley 1480 (información engañosa) sanciona, además de decir «esto es una
+ * rebaja» cuando la propuesta es «esto es barato a propósito: IA para todos».
+ * El ancla ahora es real y vive en el copy: lo que cuesta un domicilio, dos
+ * cafés o una salida a cine, comparado con el precio. Si alguna vez se vende a
+ * un precio mayor y luego se baja, el tachado se puede volver a declarar aquí.
  */
-export const PRECIO_ANCLA_MENOR = 99_999;
-
-/** El ancla como prosa, por idioma. Misma regla de separador que PRECIO_TEXTO. */
-export const ANCLA_TEXTO: Record<string, string> = {
-  es: (PRECIO_ANCLA_MENOR / 10 ** DECIMALES).toLocaleString('es-CO'),
-  en: (PRECIO_ANCLA_MENOR / 10 ** DECIMALES).toLocaleString('en-US'),
-};
 
 /**
  * Una cantidad en unidades menores como prosa: `35.000 COP`.
@@ -91,10 +83,4 @@ export function textoImporte(menor: number, lang = 'es'): string {
 export const PRECIO_VISUAL: Record<string, string> = {
   es: `$${PRECIO_TEXTO.es}`,
   en: `${PRECIO_TEXTO.en} ${MONEDA}`,
-};
-
-/** El ancla tachada, misma regla de marcador que PRECIO_VISUAL. */
-export const ANCLA_VISUAL: Record<string, string> = {
-  es: `$${ANCLA_TEXTO.es}`,
-  en: `${ANCLA_TEXTO.en} ${MONEDA}`,
 };

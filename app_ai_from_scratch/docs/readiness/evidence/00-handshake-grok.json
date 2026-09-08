@@ -1,0 +1,28 @@
+{
+  "text": "PONG",
+  "stopReason": "end_turn",
+  "sessionId": "01a074c8-aee9-7a22-9018-f89c1cf50ea8",
+  "requestId": "8889aafc-fa2d-45da-b633-dd2816f990b6",
+  "thought": "The user wants me to reply with exactly the single word PONG and nothing else. They explicitly said not to run tools. This overrides the English coaching rule because they asked for exactly one word w...",
+  "usage": {
+    "input_tokens": 46699,
+    "cache_read_input_tokens": 128,
+    "cache_creation_input_tokens": 0,
+    "output_tokens": 51,
+    "reasoning_tokens": 45,
+    "total_tokens": 46878
+  },
+  "num_turns": 1,
+  "total_cost_usd": 0.01594056,
+  "total_cost_usd_ticks": 159405600,
+  "modelUsage": {
+    "grok-4.6-build": {
+      "inputTokens": 46699,
+      "outputTokens": 51,
+      "cacheReadInputTokens": 128,
+      "cacheCreationInputTokens": 0,
+      "modelCalls": 1,
+      "costUSD": 0.01594056
+    }
+  }
+}

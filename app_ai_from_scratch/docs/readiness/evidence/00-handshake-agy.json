@@ -1,0 +1,1 @@
+{"conversation_id":"f4512d08-a38a-4dc9-8c6b-9b25ed56ba0c","status":"SUCCESS","response":"PONG\n","duration_seconds":95066.294596,"num_turns":3,"usage":{"input_tokens":813197,"output_tokens":32684,"thinking_tokens":19711,"cache_read_tokens":7286824,"total_tokens":845881}}

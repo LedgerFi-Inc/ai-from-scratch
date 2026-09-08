@@ -60,24 +60,27 @@ export interface SupportEntry {
 }
 
 export const PRICE: Price = {
-  // 35.000 COP al mes. `monto` esta en unidades MAYORES de `moneda`, y COP no
+  // 39.990 COP al mes. `monto` esta en unidades MAYORES de `moneda`, y COP no
   // tiene decimales, asi que el numero es el precio tal cual. Debe coincidir
   // con PRICE_MINOR/CURRENCY en payments/src/price.ts: lo comprueba
   // scripts/check-price.mjs, porque este es el importe que el agente le CITA
   // al estudiante y el otro es el que se le COBRA.
-  monto: 35000,
+  monto: 39990,
   moneda: 'COP',
-  tipo: 'pago_unico',
+  // Un pago compra 30 dias. En /pago se elige si se renueva solo cada mes
+  // (suscripcion en Mercado Pago, se cancela desde /perfil) o si es un pago
+  // suelto que vence a los 30 dias y se vuelve a comprar a mano.
+  tipo: 'mensual_renovacion_opcional',
   garantiaDias: 14,      // 7 was below the EU minimum
   pasarela: 'mercadopago',
   leccionesLibres: 1,
   incluye: {
     es: ['Las 12 lecciones con su explicación técnica, su analogía y dos ejemplos resueltos',
          'Los 36 labs con corrección en el servidor, los 12 quizzes y los 3 exámenes de bloque', 'Logros, rangos, ranking y ligas semanales',
-         'El PDF del curso', 'Actualizaciones futuras sin pagar otra vez'],
+         'El PDF del curso', 'Nuevos tutoriales, labs, actualizaciones y cursos mientras estés suscrito'],
     en: ['All 12 lessons with their technical explanation, analogy and two worked examples',
          'All 36 labs, graded on the server, plus 12 quizzes and 3 block exams', 'Achievements, ranks, ranking and weekly leagues',
-         'The course PDF', 'Future updates at no extra cost'],
+         'The course PDF', 'New tutorials, labs, updates and courses while you stay subscribed'],
   },
 };
 
@@ -99,12 +102,12 @@ export const ROUTES: RouteEntry[] = [
     que: { es: 'La tabla pública. Solo apareces si te apuntas, y solo con alias.', en: 'The public table. You only appear if you opt in, and only by alias.' } },
   { ruta: '/ligas', busca: ['liga', 'ligas', 'bronce', 'plata', 'oro', 'league', 'leagues', 'metal'],
     que: { es: 'La liga de la semana: bronce, plata u oro por caudal semanal.', en: 'This week’s league: bronze, silver or gold by weekly flow.' } },
-  { ruta: '/perfil', busca: ['perfil', 'pdf', 'descargar', 'profile', 'download'],
-    que: { es: 'Tus datos, el PDF del curso y el borrado de cuenta.', en: 'Your data, the course PDF and account deletion.' } },
+  { ruta: '/perfil', busca: ['perfil', 'pdf', 'descargar', 'profile', 'download', 'cancelar', 'renovacion', 'renovación', 'cancel', 'renewal'],
+    que: { es: 'Tus datos, el PDF del curso, la renovación de tu acceso y el borrado de cuenta.', en: 'Your data, the course PDF, your renewal and account deletion.' } },
   { ruta: '/ajustes', busca: ['ajustes', 'idioma', 'tema', 'oscuro', 'claro', 'settings', 'language', 'theme', 'dark', 'light'],
     que: { es: 'Idioma, tema, sonido y movimiento reducido.', en: 'Language, theme, sound and reduced motion.' } },
   { ruta: '/pago', busca: ['pago', 'comprar', 'precio', 'pagar', 'pay', 'buy', 'price', 'checkout'],
-    que: { es: 'La compra: pago único, 14 días de garantía.', en: 'Checkout: one-time payment, 14-day guarantee.' } },
+    que: { es: 'La compra: un pago abre 30 días. En el checkout eliges si se renueva solo cada mes. 14 días de garantía.', en: 'Checkout: one payment buys 30 days. At checkout you choose whether it renews every month. 14-day guarantee.' } },
   { ruta: '/soporte', busca: ['soporte', 'contacto', 'humano', 'problema', 'support', 'contact', 'human', 'bug'],
     que: { es: 'Escribirle a una persona cuando esto no alcanza.', en: 'Reaching a human when this is not enough.' } },
   { ruta: '/privacidad', busca: ['privacidad', 'datos', 'privacy', 'data', 'gdpr'],
@@ -188,8 +191,8 @@ export const GLOSSARY: GlossaryEntry[] = [
 export const FAQ: FaqEntry[] = [
   { id: 'leccion_cerrada', busca: ['cerrada', 'candado', 'no puedo abrir', 'bloqueada', 'locked', 'padlock', '402'],
     p: { es: '¿Por qué no puedo abrir una lección?', en: 'Why can’t I open a lesson?' },
-    r: { es: 'La lección 1 y sus tres labs son libres. De la 2 a la 12 se abren con la compra: pago único, 14 días de garantía.',
-         en: 'Lesson 1 and its three labs are free. Lessons 2 to 12 open with the purchase: one-time payment, 14-day guarantee.' } },
+    r: { es: 'La lección 1 y sus tres labs son libres. De la 2 a la 12 se abren con la compra: un pago te da 30 días y en el checkout eliges si se renueva solo cada mes. La renovación se cancela desde /perfil en un clic y sigues entrando hasta el final del mes pagado. 14 días de garantía.',
+         en: 'Lesson 1 and its three labs are free. Lessons 2 to 12 open with the purchase: one payment buys 30 days, and at checkout you choose whether it renews every month. Cancel the renewal from /perfil in one click and you keep access until the end of the paid month. 14-day guarantee.' } },
   { id: 'pague_sigue_cerrado', busca: ['pagué', 'pague', 'ya pagué', 'sigue cerrado', 'no se abrio', 'paid', 'still locked'],
     p: { es: 'Pagué y sigue cerrado.', en: 'I paid and it is still locked.' },
     r: { es: 'La compra se abre cuando Mercado Pago confirma el pago, no cuando vuelves a la página; si quedó pendiente puede tardar. Recarga y, si en un rato sigue igual, escribe por /soporte con la fecha y el medio de pago.',
@@ -228,7 +231,7 @@ export const HOW_IT_WORKS: Bilingual<string[]> = {
     'Resolver labs abre logros: tres grados por lección (48 en total) y un rango por cada lección cerrada (12).',
     'El ranking es opcional y con alias: nadie ve tu nombre ni tu correo.',
     'La liga semanal mide el caudal de la semana —labs resueltos por primera vez, lunes a domingo— y no el total acumulado, para que quien entra hoy también pueda ganar.',
-    'La lección 1 es libre. El resto se abre con un pago único.',
+    'La lección 1 es libre. El resto se abre con un pago que da 30 días de acceso; en el checkout eliges si se renueva solo cada mes, y la renovación se cancela desde /perfil cuando quieras.',
   ],
   en: [
     '12 lessons. Each one has the mechanism explained, an everyday analogy and two worked examples.',
@@ -237,7 +240,7 @@ export const HOW_IT_WORKS: Bilingual<string[]> = {
     'Solving labs unlocks achievements: three grades per lesson (48 in all) and one rank per closed lesson (12).',
     'The ranking is optional and alias-only: nobody sees your name or your email.',
     'The weekly league measures that week’s flow — labs solved for the first time, Monday to Sunday — not your running total, so someone starting today can still win.',
-    'Lesson 1 is free. The rest opens with a one-time payment.',
+    'Lesson 1 is free. The rest opens with a payment that buys 30 days of access; at checkout you choose whether it renews every month, and you can cancel the renewal from /perfil at any time.',
   ],
 };
 

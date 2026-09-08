@@ -24,6 +24,7 @@ are the contract api/src/ia.js and web/src/pages/chat.astro are written against.
 
 from __future__ import annotations
 
+import hmac
 import os
 from itertools import pairwise
 from typing import Annotated, Any, Literal
@@ -81,7 +82,7 @@ def require_secret(x_ia_secreto: Annotated[str | None, Header()] = None) -> None
     expected = os.environ.get("IA_SECRETO") or ""
     if not expected:
         raise HTTPException(503, "IA_SECRETO sin configurar en el servicio")
-    if x_ia_secreto != expected:
+    if not hmac.compare_digest(x_ia_secreto or "", expected):
         raise HTTPException(401, "secreto de servicio invalido")
 
 

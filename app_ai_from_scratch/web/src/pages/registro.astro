@@ -9,6 +9,7 @@ import { TOKENS, PUBLIC_BASE } from '../lib/theme-css';
 import { icon } from '../lib/icons';
 import PrefToggles from '../components/PrefToggles.astro';
 import { gato, gatoCSS } from '../lib/cat';
+import MetaPixel from '../components/MetaPixel.astro';
 
 const user = await getUser(Astro.request);
 if (user) return Astro.redirect('/panel');
@@ -26,6 +27,7 @@ const jsonld = grafo(org());
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <MetaPixel />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>{P.crear} · IA desde cero</title>
@@ -109,6 +111,11 @@ const jsonld = grafo(org());
             </div>
           </div>
 
+          <label class="consent" for="acepta" style="display:flex;gap:10px;align-items:flex-start">
+            <input id="acepta" type="checkbox" required style="margin:3px 0 0;accent-color:var(--ac);flex:none">
+            <span class="s">Acepto los <a href="/terminos">términos</a> y la <a href="/privacidad">política de privacidad</a>, y autorizo el tratamiento de mis datos (Ley 1581).</span>
+          </label>
+          <p class="fnota" id="n-acepta" aria-live="polite"></p>
           <button class="btn block" id="go" type="submit">{P.crear}</button>
           <p class="s" style="text-align:center">{P.yaTienes} <a href="/login">{P.entrar}</a></p>
         </form>
@@ -229,6 +236,14 @@ const jsonld = grafo(org());
       // de una vez todo lo que le falta. Despues el foco va al primero malo,
       // que en movil es lo unico que garantiza que el campo sea visible.
       const malos = ['name', 'email', 'pass', 'pass2'].filter((c) => !revisar(c));
+      const aceptaEl = document.getElementById('acepta');
+      const acepta = Boolean(aceptaEl && 'checked' in aceptaEl && aceptaEl.checked);
+      if (!acepta) {
+        const n = document.getElementById('n-acepta');
+        if (n) n.textContent = 'Marca la casilla para crear la cuenta.';
+        aceptaEl && aceptaEl.focus();
+        return;
+      }
       if (malos.length) {
         document.getElementById(malos[0]).focus();
         return;
@@ -238,10 +253,13 @@ const jsonld = grafo(org());
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name, email, password, lang: prefs.lang, theme: prefs.theme }),
+          body: JSON.stringify({ name, email, password, lang: prefs.lang, theme: prefs.theme, acepta: true }),
         });
         const d = await res.json().catch(() => ({}));
         if (res.status === 201) {
+          // Meta's standard event for the free sign-up. eventID = reg:<id>, so a
+          // double send counts once.
+          if (window.iaTrack) window.iaTrack('CompleteRegistration', { content_name: 'registro', status: true }, d.user && d.user.id ? 'reg:' + d.user.id : undefined);
           toast('ok', fill(P.tOk, name.split(' ')[0]), P.tOkB);
           setTimeout(() => location.assign('/panel'), 500);
           return;
