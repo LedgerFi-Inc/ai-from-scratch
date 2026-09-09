@@ -9,7 +9,7 @@ export default defineRailway((ctx) => {
     // project; use a project-unique name while retaining the Redis role.
     const cache = redis("cache");
   const files = bucket(prod ? "prod-files" : "dev-files", { region: "iad" });
-  const repo = github("Alxn44/ai-from-scratch", { branch: "main" });
+    const repo = github("Alxn44/ai-from-scratch", { branch: "mvp-readiness/2026-09" });
   const common = { source: repo, replicas: 1 };
     const data = service("data", { ...common, root: "app_ai_from_scratch", build: { builder: "DOCKERFILE", dockerfilePath: "data/Dockerfile", watchPatterns: ["data/**", "api/src/ontologia.json"] }, healthcheck: "/health", env: { DATABASE_URL: db.env.DATABASE_URL, DATA_SECRETO: { preserveExisting: true } } });
     const api = service("api", { ...common, root: "app_ai_from_scratch", build: { builder: "DOCKERFILE", dockerfilePath: "api/Dockerfile", watchPatterns: ["api/**", "auth/**", "package.json", "pnpm-lock.yaml"] }, preDeploy: "pnpm db:deploy", healthcheck: "/api/health", env: { DATABASE_URL: db.env.DATABASE_URL, REDIS_URL: cache.env.REDIS_URL, DATA_URL: "http://data.railway.internal:8080", JWT_SECRET: { preserveExisting: true }, DATA_SECRETO: { preserveExisting: true }, WEB_ORIGIN: { preserveExisting: true }, NODE_ENV: "production", APP_ENV: prod ? "PROD" : "DEV" } });
