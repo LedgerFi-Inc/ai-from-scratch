@@ -33,7 +33,7 @@ export default defineRailway((ctx) => {
   //   railway variable set AMQP_URL='amqp://app:<pass>@rabbitmq.railway.internal:5672/' --service rabbitmq
   // A volume is not optional. Without it a broker restart drops every queued
   // message, so a paid webhook can vanish before enrolment.
-  const brokerData = volume("rabbitmq-data", { sizeMB: 1024 });
+  const brokerData = volume("rabbitmq-data", { sizeMB: 1024, region: "iad" });
   const broker = service("rabbitmq", {
     source: image("rabbitmq:4-management-alpine"),
     replicas: 1,
