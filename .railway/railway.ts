@@ -37,7 +37,7 @@ export default defineRailway((ctx) => {
   const broker = service("rabbitmq", {
     source: image("rabbitmq:4-management-alpine"),
     replicas: 1,
-    volumeMounts: { "rabbitmq-data": { mountPath: "/var/lib/rabbitmq" } },
+    volumeMounts: { "/var/lib/rabbitmq": brokerData },
     deploy: { restartPolicyType: "ALWAYS" },
     env: {
       RABBITMQ_DEFAULT_USER: "app",
