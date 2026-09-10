@@ -186,6 +186,7 @@ export default defineRailway((ctx) => {
       AMQP_URL: broker.env.AMQP_URL,
       NODE_URL: INTERNAL("api"),
       IA_SECRETO: ai.env.IA_SECRETO,
+      BUS_CLAIM_URL: `${INTERNAL("api")}/api/v3/interno/bus/claim`,
     },
   });
 
